@@ -22,7 +22,10 @@ var (
 func main() {
 	flag.Parse()
 
-	s := Spiral2D(*start, *end, *round)
+	// s := Spiral2D(*start, *end, *round)
+	// s := Line2D(2.0, *round)
+	// s := Circle2D(*round)
+	s := Box2D(V2{X: *end, Y: *end}, *round)
 
 	if *out != "" {
 		png, err := NewPNG(*out, s.BoundingBox(), V2i{*size, *size})

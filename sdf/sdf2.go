@@ -185,6 +185,10 @@ func (s *LineSDF2) BoundingBox() Box2 {
 type SpiralSDF2 struct {
 	start float64 // start angle (and radius) in radians
 	end   float64 // end angle (and radius) in radians
+	sθ    float64 // start normalized angle (-pi <= sθ <= pi)
+	eθ    float64 // end normalized angle (pi <= eθ <= pi)
+	ps    V2      // start point in cartesian coordinates
+	pe    V2      // end point in cartesian coordinates
 	round float64 // rounding
 	bb    Box2    // bounding box
 }
@@ -194,9 +198,15 @@ type SpiralSDF2 struct {
 // and ending at radius (and angle) `end` in radians.
 // `start` must be less than or equal to `end`.
 func Spiral2D(start, end, round float64) SDF2 {
+	ps := V2{X: start * math.Cos(start), Y: start * math.Sin(start)}
+	pe := V2{X: end * math.Cos(end), Y: end * math.Sin(end)}
 	return &SpiralSDF2{
 		start: start,
 		end:   end,
+		sθ:    math.Atan2(ps.Y, ps.X),
+		eθ:    math.Atan2(pe.Y, pe.X),
+		ps:    ps,
+		pe:    pe,
 		round: round,
 		// TODO: clamp down on the bounding box.
 		bb: Box2{V2{-end - round, -end - round}, V2{end + round, end + round}},
@@ -206,8 +216,30 @@ func Spiral2D(start, end, round float64) SDF2 {
 // Evaluate returns the minimum distance to the spiral.
 func (s *SpiralSDF2) Evaluate(p V2) float64 {
 	pr := p.Length()
-	pθ := math.Atan2(p.Y, p.X)
-	dist := pr * math.Sqrt(2*(1-math.Cos(pθ-pr)))
+	pθ := math.Atan2(p.Y, p.X) + math.Pi
+	var dist float64
+	if pr < s.start || pr > s.end {
+		// dist = s.ps.Sub(p).Length()
+		// de := s.pe.Sub(p).Length()
+		// if de < dist {
+		// 	dist = de
+		// }
+		// if pr < s.start {
+		// 	dist = s.start - pr
+		// } else
+		// if pr > s.end {
+		// 	cθ := pθ + s.end - s.eθ
+		// 	cp := V2{X: cθ * math.Cos(cθ), Y: cθ * math.Sin(cθ)}
+		// 	de := cp.Sub(p).Length()
+		// 	if de > dist {
+		// 		dist = de
+		// 	}
+		// }
+	} else {
+		c := 1 - math.Cos(pθ-pr)
+		dist = math.Pow(c, 100)
+		// dist = pr * math.Sqrt(2*c)
+	}
 	return dist - s.round
 }
 

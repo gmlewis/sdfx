@@ -11,7 +11,6 @@ package sdf
 import (
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 )
 
@@ -19,8 +18,8 @@ const (
 	svgHeader = `<?xml version="1.0" encoding="utf-8"?>
 <!-- Generator: http://github.com/gmlewis/sdfx -->
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="%[1]vpx" y="%[2]vpx"
-  width="%[5]vpx" height="%[6]vpx" viewBox="%[1]v %[2]v %[3]v %[4]v" enable-background="new %[1]v %[2]v %[3]v %[4]v"
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+  width="%[1]vpx" height="%[2]vpx" viewBox="0 0 %[1]v %[2]v" enable-background="new 0 0 %[1]v %[2]v"
   xml:space="preserve">
 `
 )
@@ -30,7 +29,7 @@ const (
 // SVG represents an SVG renderer.
 type SVG struct {
 	name     string
-	lines    []string
+	p0s, p1s []V2
 	min, max V2
 }
 
@@ -43,7 +42,7 @@ func NewSVG(name string) *SVG {
 
 // Line outputs a line to the SVG file.
 func (s *SVG) Line(p0, p1 V2) {
-	if len(s.lines) == 0 {
+	if len(s.p0s) == 0 {
 		s.min = p0.Min(p1)
 		s.max = p0.Max(p1)
 	} else {
@@ -52,10 +51,8 @@ func (s *SVG) Line(p0, p1 V2) {
 		s.max = s.max.Max(p0)
 		s.max = s.max.Max(p1)
 	}
-	s.lines = append(
-		s.lines,
-		fmt.Sprintf(`<line x1="%v" y1="%v" x2="%v" y2="%v"/>`, p0.X, p0.Y, p1.X, p1.Y),
-	)
+	s.p0s = append(s.p0s, p0)
+	s.p1s = append(s.p1s, p1)
 }
 
 // Save closes the SVG file.
@@ -64,13 +61,12 @@ func (s *SVG) Save() error {
 	if err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(f, svgHeader, s.min.X, s.min.Y, s.max.X, s.max.Y, s.max.X-s.min.X, s.max.Y-s.min.Y); err != nil {
-		return err
+	fmt.Fprintf(f, svgHeader, s.max.X-s.min.X, s.max.Y-s.min.Y)
+	for i, p0 := range s.p0s {
+		p1 := s.p1s[i]
+		fmt.Fprintf(f, `<line x1="%v" y1="%v" x2="%v" y2="%v"/>`+"\n", p0.X-s.min.X, s.max.Y-p0.Y, p1.X-s.min.X, s.max.Y-p1.Y)
 	}
-	s.lines = append(s.lines, "</svg>")
-	if _, err := fmt.Fprintln(f, strings.Join(s.lines, "\n")); err != nil {
-		return err
-	}
+	fmt.Fprintln(f, "</svg>")
 	return f.Close()
 }
 
