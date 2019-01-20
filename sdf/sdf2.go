@@ -10,7 +10,6 @@ package sdf
 
 import (
 	"errors"
-	"fmt"
 	"math"
 )
 
@@ -222,31 +221,8 @@ func (s *SpiralSDF2) Evaluate(p V2) float64 {
 	c := 1 - math.Cos(pθ-pr)
 	dist := 0.5 * math.Pi * math.Sqrt(c)
 
-	dbg := pr < s.start+0.1 && pr > s.start-0.1 && p.X < 0.1 && p.X > -0.1
-	if dbg {
-		if p.Y < 0 {
-			fmt.Printf(" TOP: ")
-		} else {
-			fmt.Printf(" BOT: ")
-		}
-		actualAng := pθ + (2 * math.Pi)
-		actual := V2{X: actualAng * math.Cos(actualAng), Y: actualAng * math.Sin(actualAng)}
-		actDist := actual.Sub(p).Length()
-		fmt.Printf("p=%.3f, pr=%.3f, pθ=%.3f, dist=%.3f, c=%.3f, actualAng=%.2f, actual=%.2f, actDist=%.2f\n", p, pr, pθ, dist, c, actualAng, actual, actDist)
-	}
-
 	if s.start > 0 && pr < s.start+math.Pi {
 		dist = s.ps.Sub(p).Length()
-
-		if dbg {
-			if p.Y < 0 {
-				fmt.Printf(" TOP ps=%.2f: ", s.ps)
-			} else {
-				fmt.Printf(" BOT ps=%.2f: ", s.ps)
-			}
-			fmt.Printf("p=%.3f, pr=%.3f, pθ=%.3f, dist=%.3f, c=%.3f\n", p, pr, pθ, dist, c)
-		}
-
 		angleStop := s.start + 2*math.Pi
 		if s.end < angleStop {
 			angleStop = s.end
@@ -256,16 +232,6 @@ func (s *SpiralSDF2) Evaluate(p V2) float64 {
 			d := sp.Sub(p).Length()
 			if d < dist {
 				dist = d
-
-				if dbg {
-					if p.Y < 0 {
-						fmt.Printf(" TOP sp=%.2f, angle=%.2f: ", sp, angle)
-					} else {
-						fmt.Printf(" BOT sp=%.2f, angle=%.2f: ", sp, angle)
-					}
-					fmt.Printf("p=%.3f, pr=%.3f, pθ=%.3f, dist=%.3f, c=%.3f\n", p, pr, pθ, dist, c)
-				}
-
 			}
 		}
 	} else if pr > s.end-math.Pi {
