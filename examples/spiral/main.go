@@ -10,9 +10,9 @@ import (
 )
 
 var (
-	start = flag.Float64("start", 0.0, "Start radius (and angle) in radians of spiral")
-	end   = flag.Float64("end", 2*math.Pi, "End radius (and angle) in radians of spiral")
-	round = flag.Float64("round", 0.0, "Round radius for spiral")
+	start = flag.Float64("start", 2*math.Pi, "Start radius (and angle) in radians of spiral")
+	end   = flag.Float64("end", 8*math.Pi, "End radius (and angle) in radians of spiral")
+	round = flag.Float64("round", 0.5*math.Pi, "Round radius for spiral")
 	size  = flag.Int("size", 800, "Size of output file (width and height)")
 	out   = flag.String("out", "spiral.png", "Output PNG filename of spiral")
 	svg   = flag.String("svg", "spiral.svg", "Output SVG filename of spiral")
