@@ -216,30 +216,40 @@ func Spiral2D(start, end, round float64) SDF2 {
 func (s *SpiralSDF2) Evaluate(p V2) float64 {
 	pr := p.Length()
 	pθ := math.Atan2(p.Y, p.X)
-	var dist float64
-	// if pr < s.start || pr > s.end {
-	// dist = s.ps.Sub(p).Length()
-	// de := s.pe.Sub(p).Length()
-	// if de > dist {
-	// dist = de
-	// }
-	// if pr < s.start {
-	// 	dist = s.start - pr
-	// } else
-	// if pr > s.end {
-	// 	cθ := pθ + s.end - s.eθ
-	// 	cp := V2{X: cθ * math.Cos(cθ), Y: cθ * math.Sin(cθ)}
-	// 	de := cp.Sub(p).Length()
-	// 	if de > dist {
-	// 		dist = de
-	// 	}
-	// }
-	// } else {
 	c := 1 - math.Cos(pθ-pr)
-	// dist = -math.Pow(c, 100)
-	dist = 0.25 * math.Pi * math.Sqrt(2*c)
-	// dist = c
-	// }
+	dist := 0.5 * math.Pi * math.Sqrt(2*c)
+
+	if s.start > 0 && pr < s.start+math.Pi {
+		dist = s.ps.Sub(p).Length()
+		const sampleStep = 0.01
+		angleStop := s.start + 2*math.Pi
+		if s.end < angleStop {
+			angleStop = s.end
+		}
+		for angle := s.start; angle < angleStop; angle += sampleStep {
+			sp := V2{X: angle * math.Cos(angle), Y: angle * math.Sin(angle)}
+			d := sp.Sub(p).Length()
+			if d < dist {
+				dist = d
+			}
+		}
+	} else if pr > s.end {
+		// dist = s.ps.Sub(p).Length()
+		// de := s.pe.Sub(p).Length()
+		// if de > dist {
+		// 	dist = de
+		// }
+		// if pr < s.start {
+		// 	dist = s.start - pr
+		// } else if pr > s.end {
+		// 	cθ := pθ + s.end - s.eθ
+		// 	cp := V2{X: cθ * math.Cos(cθ), Y: cθ * math.Sin(cθ)}
+		// 	de := cp.Sub(p).Length()
+		// 	if de > dist {
+		// 		dist = de
+		// 	}
+		// }
+	}
 	return dist - s.round
 }
 

@@ -43,5 +43,9 @@ func main() {
 		if err := RenderSVG(s, *size, *svg); err != nil {
 			log.Fatalf("RenderSVG: %v", err)
 		}
+
+		if err := RenderSVG_Slow(s, *size, "spiral_slow.svg"); err != nil {
+			log.Fatalf("RenderSVG_Slow: %v", err)
+		}
 	}
 }
