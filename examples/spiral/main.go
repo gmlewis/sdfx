@@ -6,7 +6,7 @@ import (
 	"log"
 	"math"
 
-	. "github.com/deadsy/sdfx/sdf"
+	. "github.com/gmlewis/sdfx/sdf"
 )
 
 var (
