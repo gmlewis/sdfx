@@ -208,8 +208,7 @@ func Spiral2D(start, end, round float64) SDF2 {
 		ps:    ps,
 		pe:    pe,
 		round: round,
-		// TODO: clamp down on the bounding box.
-		bb: Box2{V2{-end - round, -end - round}, V2{end + round, end + round}},
+		bb:    Box2{V2{-end - round, -end - round}, V2{end + round, end + round}},
 	}
 }
 
@@ -218,28 +217,29 @@ func (s *SpiralSDF2) Evaluate(p V2) float64 {
 	pr := p.Length()
 	pθ := math.Atan2(p.Y, p.X)
 	var dist float64
-	if pr < s.start || pr > s.end {
-		// dist = s.ps.Sub(p).Length()
-		// de := s.pe.Sub(p).Length()
-		// if de > dist {
-		// dist = de
-		// }
-		// if pr < s.start {
-		// 	dist = s.start - pr
-		// } else
-		// if pr > s.end {
-		// 	cθ := pθ + s.end - s.eθ
-		// 	cp := V2{X: cθ * math.Cos(cθ), Y: cθ * math.Sin(cθ)}
-		// 	de := cp.Sub(p).Length()
-		// 	if de > dist {
-		// 		dist = de
-		// 	}
-		// }
-	} else {
-		c := 1 + math.Cos(pθ-pr)
-		dist = -math.Pow(c, 100)
-		// dist = math.Sqrt(2 * c)
-	}
+	// if pr < s.start || pr > s.end {
+	// dist = s.ps.Sub(p).Length()
+	// de := s.pe.Sub(p).Length()
+	// if de > dist {
+	// dist = de
+	// }
+	// if pr < s.start {
+	// 	dist = s.start - pr
+	// } else
+	// if pr > s.end {
+	// 	cθ := pθ + s.end - s.eθ
+	// 	cp := V2{X: cθ * math.Cos(cθ), Y: cθ * math.Sin(cθ)}
+	// 	de := cp.Sub(p).Length()
+	// 	if de > dist {
+	// 		dist = de
+	// 	}
+	// }
+	// } else {
+	c := 1 + math.Cos(pθ-pr)
+	// dist = -math.Pow(c, 100)
+	// dist = math.Sqrt(2 * c)
+	dist = c
+	// }
 	return dist - s.round
 }
 
