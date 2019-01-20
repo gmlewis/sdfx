@@ -216,13 +216,13 @@ func Spiral2D(start, end, round float64) SDF2 {
 // Evaluate returns the minimum distance to the spiral.
 func (s *SpiralSDF2) Evaluate(p V2) float64 {
 	pr := p.Length()
-	pθ := math.Atan2(p.Y, p.X) + math.Pi
+	pθ := math.Atan2(p.Y, p.X)
 	var dist float64
 	if pr < s.start || pr > s.end {
 		// dist = s.ps.Sub(p).Length()
 		// de := s.pe.Sub(p).Length()
-		// if de < dist {
-		// 	dist = de
+		// if de > dist {
+		// dist = de
 		// }
 		// if pr < s.start {
 		// 	dist = s.start - pr
@@ -236,9 +236,9 @@ func (s *SpiralSDF2) Evaluate(p V2) float64 {
 		// 	}
 		// }
 	} else {
-		c := 1 - math.Cos(pθ-pr)
-		dist = math.Pow(c, 100)
-		// dist = pr * math.Sqrt(2*c)
+		c := 1 + math.Cos(pθ-pr)
+		dist = -math.Pow(c, 100)
+		// dist = math.Sqrt(2 * c)
 	}
 	return dist - s.round
 }

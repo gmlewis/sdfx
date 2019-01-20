@@ -16,16 +16,13 @@ var (
 	size  = flag.Int("size", 800, "Size of output file (width and height)")
 	out   = flag.String("out", "spiral.png", "Output PNG filename of spiral")
 	svg   = flag.String("svg", "spiral.svg", "Output SVG filename of spiral")
-	dxf   = flag.String("dxf", "spiral.dxf", "Output DXF filename of spiral")
+	dxf   = flag.String("dxf", "", "Output DXF filename of spiral")
 )
 
 func main() {
 	flag.Parse()
 
-	// s := Spiral2D(*start, *end, *round)
-	// s := Line2D(2.0, *round)
-	// s := Circle2D(*round)
-	s := Box2D(V2{X: *end, Y: *end}, *round)
+	s := Spiral2D(*start, *end, *round)
 
 	if *out != "" {
 		png, err := NewPNG(*out, s.BoundingBox(), V2i{*size, *size})

@@ -10,9 +10,10 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 
-	. "github.com/deadsy/sdfx/sdf"
+	. "github.com/gmlewis/sdfx/sdf"
 )
 
 //-----------------------------------------------------------------------------
@@ -39,6 +40,16 @@ func main() {
 
 	RenderDXF(s2d, 600, "shape.dxf")
 	RenderSVG(s2d, 600, "shape.svg")
+
+	fmt.Println("rendering shape.png (600x525)")
+	png, err := NewPNG("shape.png", s2d.BoundingBox(), V2i{600, 525})
+	if err != nil {
+		log.Fatalf("NewPNG: %v", err)
+	}
+	png.RenderSDF2(s2d)
+	if err := png.Save(); err != nil {
+		log.Fatalf("Save: %v", err)
+	}
 
 	s3d := ExtrudeRounded3D(s2d, 1.0, 0.2)
 	RenderSTL(s3d, 600, "shape.stl")

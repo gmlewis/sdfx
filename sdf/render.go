@@ -147,7 +147,7 @@ func RenderSVG(
 	resolution := bbSize.MaxComponent() / float64(meshCells)
 	cells := bbSize.DivScalar(resolution).ToV2i()
 
-	fmt.Printf("rendering %s (%dx%d, resolution %v)\n", path, cells[0], cells[1], resolution)
+	fmt.Printf("rendering %s (%dx%d, resolution %.2f)\n", path, cells[0], cells[1], resolution)
 
 	// write the line segments to an SVG file
 	var wg sync.WaitGroup
