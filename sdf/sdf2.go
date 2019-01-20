@@ -235,10 +235,10 @@ func (s *SpiralSDF2) Evaluate(p V2) float64 {
 	// 	}
 	// }
 	// } else {
-	c := 1 + math.Cos(pθ-pr)
+	c := 1 - math.Cos(pθ-pr)
 	// dist = -math.Pow(c, 100)
-	// dist = math.Sqrt(2 * c)
-	dist = c
+	dist = 0.25 * math.Pi * math.Sqrt(2*c)
+	// dist = c
 	// }
 	return dist - s.round
 }
