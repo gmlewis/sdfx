@@ -214,20 +214,31 @@ func Spiral2D(start, end, round float64) SDF2 {
 
 // Evaluate returns the minimum distance to the spiral.
 func (s *SpiralSDF2) Evaluate(p V2) float64 {
-	const sampleStep = 0.01
-
 	pr := p.Length()
 	pθ := math.Atan2(p.Y, p.X)
 	c := 1 - math.Cos(pθ-pr)
 	dist := 0.5 * math.Pi * math.Sqrt(c)
 
+	ds := s.ps.Sub(p).Length()
+	if ds < dist {
+		dist = ds
+	}
+	de := s.pe.Sub(p).Length()
+	if de < dist {
+		dist = de
+	}
+
 	if s.start > 0 && pr < s.start+math.Pi {
-		dist = s.ps.Sub(p).Length()
-		angleStop := s.start + 2*math.Pi
-		if s.end < angleStop {
-			angleStop = s.end
+		dist = ds
+		if de < dist {
+			dist = de
 		}
-		for angle := s.start; angle < angleStop; angle += sampleStep {
+		delta := pθ - s.sθ
+		for delta < 0 {
+			delta += 2 * math.Pi
+		}
+		angle := s.start + delta
+		if angle <= s.end {
 			sp := V2{X: angle * math.Cos(angle), Y: angle * math.Sin(angle)}
 			d := sp.Sub(p).Length()
 			if d < dist {
@@ -235,12 +246,16 @@ func (s *SpiralSDF2) Evaluate(p V2) float64 {
 			}
 		}
 	} else if pr > s.end-math.Pi {
-		dist = s.pe.Sub(p).Length()
-		angleStart := s.end - 2*math.Pi
-		if s.start > angleStart {
-			angleStart = s.start
+		dist = de
+		if ds < dist {
+			dist = ds
 		}
-		for angle := angleStart; angle < s.end; angle += sampleStep {
+		delta := pθ - s.eθ
+		for delta > 0 {
+			delta -= 2 * math.Pi
+		}
+		angle := s.end + delta
+		if angle >= s.start {
 			sp := V2{X: angle * math.Cos(angle), Y: angle * math.Sin(angle)}
 			d := sp.Sub(p).Length()
 			if d < dist {
