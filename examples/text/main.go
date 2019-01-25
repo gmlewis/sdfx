@@ -39,7 +39,7 @@ func main() {
 	}
 
 	RenderDXF(s2d, 600, "shape.dxf")
-	RenderSVG(s2d, 600, "shape.svg")
+	RenderSVG(s2d, 600, "shape.svg", "fill:none;stroke:black;stroke-width:0.1")
 
 	fmt.Println("rendering shape.png (600x525)")
 	png, err := NewPNG("shape.png", s2d.BoundingBox(), V2i{600, 525})

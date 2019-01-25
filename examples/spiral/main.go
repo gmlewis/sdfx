@@ -10,13 +10,14 @@ import (
 )
 
 var (
-	start = flag.Float64("start", 2*math.Pi, "Start radius (and angle) in radians of spiral")
-	end   = flag.Float64("end", 8*math.Pi, "End radius (and angle) in radians of spiral")
-	round = flag.Float64("round", 0.5*math.Pi, "Round radius for spiral")
-	size  = flag.Int("size", 800, "Size of output file (width and height)")
-	out   = flag.String("out", "spiral.png", "Output PNG filename of spiral")
-	svg   = flag.String("svg", "spiral.svg", "Output SVG filename of spiral")
-	dxf   = flag.String("dxf", "", "Output DXF filename of spiral")
+	start     = flag.Float64("start", 2*math.Pi, "Start radius (and angle) in radians of spiral")
+	end       = flag.Float64("end", 8*math.Pi, "End radius (and angle) in radians of spiral")
+	round     = flag.Float64("round", 0.5*math.Pi, "Round radius for spiral")
+	size      = flag.Int("size", 800, "Size of output file (width and height)")
+	out       = flag.String("out", "spiral.png", "Output PNG filename of spiral")
+	svg       = flag.String("svg", "spiral.svg", "Output SVG filename of spiral")
+	dxf       = flag.String("dxf", "", "Output DXF filename of spiral")
+	lineStyle = flag.String("line_style", "fill:none;stroke:black;stroke-width:0.1", "SVG line style")
 )
 
 func main() {
@@ -40,11 +41,11 @@ func main() {
 	}
 
 	if *svg != "" {
-		if err := RenderSVG(s, *size, *svg); err != nil {
+		if err := RenderSVG(s, *size, *svg, *lineStyle); err != nil {
 			log.Fatalf("RenderSVG: %v", err)
 		}
 
-		if err := RenderSVGSlow(s, *size, "spiral_slow.svg"); err != nil {
+		if err := RenderSVGSlow(s, *size, "spiral_slow.svg", *lineStyle); err != nil {
 			log.Fatalf("RenderSVG_Slow: %v", err)
 		}
 	}
