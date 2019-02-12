@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	. "github.com/deadsy/sdfx/sdf"
+	. "github.com/gmlewis/sdfx/sdf"
 )
 
 func test1() {
