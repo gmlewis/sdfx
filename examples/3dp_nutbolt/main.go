@@ -20,7 +20,7 @@ import . "github.com/deadsy/sdfx/sdf"
 // const MM_TOLERANCE = 0.2 // very tight
 // const MM_TOLERANCE = 0.3 // good plastic to plastic fit
 const MM_TOLERANCE = 0.3
-const INCH_TOLERANCE = MM_TOLERANCE / MM_PER_INCH
+const INCH_TOLERANCE = MM_TOLERANCE / MillimetresPerInch
 
 // Quality: The long axis of the model is rendered with N STL cells. A larger
 // value will take longer to generate, give a better model resolution and a
@@ -51,8 +51,8 @@ func Bolt(
 	}
 
 	var head_3d SDF3
-	head_r := t.Hex_Radius()
-	head_h := t.Hex_Height()
+	head_r := t.HexRadius()
+	head_h := t.HexHeight()
 	if style == "hex" {
 		head_3d = HexHead3D(head_r, head_h, "b")
 	} else if style == "knurl" {
@@ -73,7 +73,7 @@ func Bolt(
 	screw_ofs := l/2 + shank_length
 	screw_3d := Screw3D(ISOThread(r, t.Pitch, "external"), l, t.Pitch, 1)
 	// chamfer the thread
-	screw_3d = Chamfered_Cylinder(screw_3d, 0, 0.5)
+	screw_3d = ChamferedCylinder(screw_3d, 0, 0.5)
 	screw_3d = Transform3D(screw_3d, Translate3d(V3{0, 0, screw_ofs}))
 
 	return Union3D(head_3d, screw_3d, shank_3d)
@@ -91,8 +91,8 @@ func Nut(
 	t := ThreadLookup(name)
 
 	var nut_3d SDF3
-	nut_r := t.Hex_Radius()
-	nut_h := t.Hex_Height()
+	nut_r := t.HexRadius()
+	nut_h := t.HexHeight()
 	if style == "hex" {
 		nut_3d = HexHead3D(nut_r, nut_h, "tb")
 	} else if style == "knurl" {
@@ -112,11 +112,11 @@ func Nut(
 func inch() {
 	// bolt
 	bolt_3d := Bolt("unc_5/8", "knurl", INCH_TOLERANCE, 2.0, 0.5)
-	bolt_3d = ScaleUniform3D(bolt_3d, MM_PER_INCH)
+	bolt_3d = ScaleUniform3D(bolt_3d, MillimetresPerInch)
 	RenderSTL(bolt_3d, QUALITY, "bolt.stl")
 	// nut
 	nut_3d := Nut("unc_5/8", "knurl", INCH_TOLERANCE)
-	nut_3d = ScaleUniform3D(nut_3d, MM_PER_INCH)
+	nut_3d = ScaleUniform3D(nut_3d, MillimetresPerInch)
 	RenderSTL(nut_3d, QUALITY, "nut.stl")
 }
 

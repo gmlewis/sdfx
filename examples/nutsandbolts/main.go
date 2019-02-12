@@ -34,8 +34,8 @@ func Hex_Bolt(
 	}
 
 	// hex head
-	hex_r := t.Hex_Radius()
-	hex_h := t.Hex_Height()
+	hex_r := t.HexRadius()
+	hex_h := t.HexHeight()
 	hex_3d := HexHead3D(hex_r, hex_h, "b")
 
 	// add a rounded cylinder
@@ -53,7 +53,7 @@ func Hex_Bolt(
 	screw_ofs := l/2 + shank_length
 	screw_3d := Screw3D(ISOThread(r, t.Pitch, "external"), l, t.Pitch, 1)
 	// chamfer the thread
-	screw_3d = Chamfered_Cylinder(screw_3d, 0, 0.5)
+	screw_3d = ChamferedCylinder(screw_3d, 0, 0.5)
 	screw_3d = Transform3D(screw_3d, Translate3d(V3{0, 0, screw_ofs}))
 
 	return Union3D(hex_3d, screw_3d, shank_3d)
@@ -75,7 +75,7 @@ func Hex_Nut(
 	}
 
 	// hex nut body
-	hex_3d := HexHead3D(t.Hex_Radius(), height, "tb")
+	hex_3d := HexHead3D(t.HexRadius(), height, "tb")
 
 	// internal thread
 	thread_3d := Screw3D(ISOThread(t.Radius+tolerance, t.Pitch, "internal"), height, t.Pitch, 1)
@@ -93,8 +93,8 @@ func Nut_And_Bolt(
 ) SDF3 {
 	t := ThreadLookup(name)
 	bolt_3d := Hex_Bolt(name, tolerance, total_length, shank_length)
-	nut_3d := Hex_Nut(name, tolerance, t.Hex_Height()/1.5)
-	z_ofs := total_length + t.Hex_Height() + 0.25
+	nut_3d := Hex_Nut(name, tolerance, t.HexHeight()/1.5)
+	z_ofs := total_length + t.HexHeight() + 0.25
 	nut_3d = Transform3D(nut_3d, Translate3d(V3{0, 0, z_ofs}))
 	return Union3D(nut_3d, bolt_3d)
 }

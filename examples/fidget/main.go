@@ -25,15 +25,15 @@ var clearance = 0.0
 //-----------------------------------------------------------------------------
 
 // ball bearing counterweights
-var bb_large_d = (1.0 / 2.0) * MM_PER_INCH
-var bb_small_d = (5.0 / 16.0) * MM_PER_INCH
+var bb_large_d = (1.0 / 2.0) * MillimetresPerInch
+var bb_small_d = (5.0 / 16.0) * MillimetresPerInch
 
 //-----------------------------------------------------------------------------
 
 // Return an N petal bezier flower.
 func flower(n int, r0, r1, r2 float64) SDF2 {
 
-	theta := TAU / float64(n)
+	theta := Tau / float64(n)
 	b := NewBezier()
 
 	p0 := V2{r1, 0}.Add(PolarToXY(r0, DtoR(-135)))
@@ -162,7 +162,7 @@ func spincap_double(mode string) SDF3 {
 		// Add an external screw thread.
 		t := ISOThread(thread_r-thread_tolerance, thread_pitch, "external")
 		screw := Screw3D(t, bearing_thickness, thread_pitch, 1)
-		screw = Chamfered_Cylinder(screw, 0, 0.5)
+		screw = ChamferedCylinder(screw, 0, 0.5)
 		screw = Transform3D(screw, Translate3d(V3{0, 0, 1.5 * l}))
 		return Union3D(spincap(r, l+0.5), screw)
 
