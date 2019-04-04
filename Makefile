@@ -18,12 +18,15 @@ DIRS = 3dp_nutbolt \
        gears \
        gas_cap \
        geneva \
+       keycap \
        nordic \
+       nutcover \
        nutsandbolts \
        phone \
        pool \
        pottery_wheel \
        simple_stl \
+       spiral \
        square_flange \
        test \
        text \
