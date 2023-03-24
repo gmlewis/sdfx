@@ -1,6 +1,6 @@
 module github.com/gmlewis/sdfx
 
-go 1.13
+go 1.20
 
 require (
 	github.com/ajstarks/svgo v0.0.0-20211024235047-1546f124cd8b
@@ -9,8 +9,15 @@ require (
 	github.com/hpinc/go3mf v0.24.2
 	github.com/hschendel/stl v1.0.4
 	github.com/llgcode/draw2d v0.0.0-20210904075650-80aa0a2a901d
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.8.2
 	github.com/yofu/dxf v0.0.0-20190710012328-5a6d1e83f16c
-	golang.org/x/image v0.5.0
+	golang.org/x/image v0.6.0
 	gonum.org/v1/gonum v0.12.0
+)
+
+require (
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/qmuntal/opc v0.7.10 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
