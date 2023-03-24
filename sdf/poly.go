@@ -11,6 +11,10 @@ package sdf
 import (
 	"fmt"
 	"math"
+
+	"github.com/gmlewis/sdfx/vec/conv"
+	"github.com/gmlewis/sdfx/vec/p2"
+	v2 "github.com/gmlewis/sdfx/vec/v2"
 )
 
 //-----------------------------------------------------------------------------
@@ -26,7 +30,7 @@ type Polygon struct {
 type PolygonVertex struct {
 	relative bool    // vertex position is relative to previous vertex
 	vtype    pvType  // type of polygon vertex
-	vertex   V2      // vertex coordinates
+	vertex   v2.Vec  // vertex coordinates
 	facets   int     // number of polygon facets to create when smoothing
 	radius   float64 // radius of smoothing (0 == none)
 }
@@ -36,7 +40,6 @@ type pvType int
 
 const (
 	pvNormal pvType = iota // normal vertex
-	pvHide                 // hide the line segment in rendering
 	pvSmooth               // smooth the vertex
 	pvArc                  // replace the line segment with an arc
 )
@@ -52,13 +55,7 @@ func (v *PolygonVertex) Rel() *PolygonVertex {
 
 // Polar treats the polygon vertex values as polar coordinates (r, theta).
 func (v *PolygonVertex) Polar() *PolygonVertex {
-	v.vertex = PolarToXY(v.vertex.X, v.vertex.Y)
-	return v
-}
-
-// Hide hides the line segment for this vertex in the dxf render.
-func (v *PolygonVertex) Hide() *PolygonVertex {
-	v.vtype = pvHide
+	v.vertex = conv.P2ToV2(p2.Vec{v.vertex.X, v.vertex.Y})
 	return v
 }
 
@@ -138,13 +135,13 @@ func (p *Polygon) arcVertex(i int) bool {
 	}
 	// The sign of the radius indicates which side of the chord the arc is on.
 	side := Sign(v.radius)
-	radius := Abs(v.radius)
+	radius := math.Abs(v.radius)
 	// two points on the chord
 	a := pv.vertex
 	b := v.vertex
 	// Normal to chord
 	ba := b.Sub(a).Normalize()
-	n := V2{ba.Y, -ba.X}.MulScalar(side)
+	n := v2.Vec{ba.Y, -ba.X}.MulScalar(side)
 	// midpoint
 	mid := a.Add(b).MulScalar(0.5)
 	// distance from a to midpoint
@@ -253,18 +250,19 @@ func (p *Polygon) smoothVertices() {
 //-----------------------------------------------------------------------------
 
 // relToAbs converts relative vertices to absolute vertices.
-func (p *Polygon) relToAbs() {
+func (p *Polygon) relToAbs() error {
 	for i := range p.vlist {
 		v := &p.vlist[i]
 		if v.relative {
 			pv := p.prevVertex(i)
 			if pv.relative {
-				panic("relative vertex needs an absolute reference")
+				return fmt.Errorf("relative vertex needs an absolute reference")
 			}
 			v.vertex = v.vertex.Add(pv.vertex)
 			v.relative = false
 		}
 	}
+	return nil
 }
 
 //-----------------------------------------------------------------------------
@@ -283,6 +281,11 @@ func (p *Polygon) Close() {
 	p.closed = true
 }
 
+// Closed returns true/fale if the polygon is closed/open.
+func (p *Polygon) Closed() bool {
+	return p.closed
+}
+
 // Reverse reverses the order the vertices are returned.
 func (p *Polygon) Reverse() {
 	p.reverse = true
@@ -294,7 +297,7 @@ func NewPolygon() *Polygon {
 }
 
 // AddV2 adds a V2 vertex to a polygon.
-func (p *Polygon) AddV2(x V2) *PolygonVertex {
+func (p *Polygon) AddV2(x v2.Vec) *PolygonVertex {
 	v := PolygonVertex{}
 	v.vertex = x
 	v.vtype = pvNormal
@@ -303,7 +306,7 @@ func (p *Polygon) AddV2(x V2) *PolygonVertex {
 }
 
 // AddV2Set adds a set of V2 vertices to a polygon.
-func (p *Polygon) AddV2Set(x []V2) {
+func (p *Polygon) AddV2Set(x []v2.Vec) {
 	for _, v := range x {
 		p.AddV2(v)
 	}
@@ -311,7 +314,7 @@ func (p *Polygon) AddV2Set(x []V2) {
 
 // Add an x,y vertex to a polygon.
 func (p *Polygon) Add(x, y float64) *PolygonVertex {
-	return p.AddV2(V2{x, y})
+	return p.AddV2(v2.Vec{x, y})
 }
 
 // Drop the last vertex from the list.
@@ -320,13 +323,13 @@ func (p *Polygon) Drop() {
 }
 
 // Vertices returns the vertices of the polygon.
-func (p *Polygon) Vertices() []V2 {
+func (p *Polygon) Vertices() []v2.Vec {
 	if p.vlist == nil {
 		return nil
 	}
 	p.fixups()
 	n := len(p.vlist)
-	v := make([]V2, n)
+	v := make([]v2.Vec, n)
 	if p.reverse {
 		for i, pv := range p.vlist {
 			v[n-1-i] = pv.vertex
@@ -339,46 +342,16 @@ func (p *Polygon) Vertices() []V2 {
 	return v
 }
 
-// Render outputs a polygon as a 2D DXF file.
-func (p *Polygon) Render(path string) error {
-	if p.vlist == nil {
-		return fmt.Errorf("no vertices")
-	}
-	p.fixups()
-	fmt.Printf("rendering %s\n", path)
-	d := NewDXF(path)
-	for i := 0; i < len(p.vlist)-1; i++ {
-		if p.vlist[i+1].vtype != pvHide {
-			p0 := p.vlist[i].vertex
-			p1 := p.vlist[i+1].vertex
-			d.Line(p0, p1)
-		}
-	}
-	// close the polygon if needed
-	if p.closed {
-		p0 := p.vlist[len(p.vlist)-1].vertex
-		p1 := p.vlist[0].vertex
-		if !p0.Equals(p1, tolerance) {
-			d.Line(p0, p1)
-		}
-	}
-	err := d.Save()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 //-----------------------------------------------------------------------------
 
 // Nagon return the vertices of a N sided regular polygon.
-func Nagon(n int, radius float64) V2Set {
+func Nagon(n int, radius float64) v2.VecSet {
 	if n < 3 {
 		return nil
 	}
 	m := Rotate(Tau / float64(n))
-	v := make(V2Set, n)
-	p := V2{radius, 0}
+	v := make(v2.VecSet, n)
+	p := v2.Vec{radius, 0}
 	for i := 0; i < n; i++ {
 		v[i] = p
 		p = m.MulPosition(p)

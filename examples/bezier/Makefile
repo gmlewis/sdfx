@@ -1,7 +1,2 @@
-all:
-	go build
-clean:
-	go clean
-	-rm *.stl
-	-rm *.dxf
-	-rm *.png
+TOP = ../..
+include $(TOP)/mk/example.mk

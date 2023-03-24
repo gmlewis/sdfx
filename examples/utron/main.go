@@ -3,12 +3,15 @@
 package main
 
 import (
+	"log"
 	"math"
 
-	. "github.com/deadsy/sdfx/sdf"
 	"github.com/gmlewis/sdfx/examples/utron/enclosure"
-	"github.com/gmlewis/sdfx/examples/utron/half-magnet"
-	"github.com/gmlewis/sdfx/examples/utron/half-utron"
+	half_magnet "github.com/gmlewis/sdfx/examples/utron/half-magnet"
+	half_utron "github.com/gmlewis/sdfx/examples/utron/half-utron"
+	"github.com/gmlewis/sdfx/render"
+	. "github.com/gmlewis/sdfx/sdf"
+	v3 "github.com/gmlewis/sdfx/vec/v3"
 )
 
 // All dimensions in mm
@@ -25,10 +28,13 @@ var (
 	utronRadius = 0.5 * math.Sqrt(2*utronEdge*utronEdge)
 )
 
+type V3 = v3.Vec
+
 func top() SDF3 {
 	top := enclosure.Top(utronEdge)
 	ch := 4 * magnetHeight
-	topCutout := Cylinder3D(ch, 0.5*magnetDiam+metalMargin, 1)
+	topCutout, err := Cylinder3D(ch, 0.5*magnetDiam+metalMargin, 1)
+	must(err)
 	ssHeight := 0.5*(4*magnetHeight-utronEdge) - magnetMargin
 	m := Translate3d(V3{0, 0, 0.5*ch + 2*magnetHeight - ssHeight - metalMargin})
 	m = RotateY(-0.25 * math.Pi).Mul(m)
@@ -36,7 +42,8 @@ func top() SDF3 {
 	topCutout = Transform3D(topCutout, m)
 	side := magnetDiam + 2*metalMargin
 	big := 10 * utronEdge
-	boxCutout := Box3D(V3{side, big, side}, 0)
+	boxCutout, err := Box3D(V3{side, big, side}, 0)
+	must(err)
 	m = Translate3d(V3{0, 0.5 * big, 0.5*side + 2*magnetHeight - ssHeight - metalMargin})
 	m = RotateY(-0.25 * math.Pi).Mul(m)
 	m = Translate3d(V3{0, 0, utronRadius}).Mul(m)
@@ -50,7 +57,8 @@ func top() SDF3 {
 func base() SDF3 {
 	base := enclosure.Base(utronEdge)
 	ch := 4 * magnetHeight
-	baseCutout := Cylinder3D(ch, 0.5*magnetDiam+metalMargin, 1)
+	baseCutout, err := Cylinder3D(ch, 0.5*magnetDiam+metalMargin, 1)
+	must(err)
 	ssHeight := 0.5*(4*magnetHeight-utronEdge) - magnetMargin
 	m := Translate3d(V3{0, 0, -0.5*ch - 2*magnetHeight + ssHeight + metalMargin})
 	m = RotateY(-0.25 * math.Pi).Mul(m)
@@ -58,7 +66,8 @@ func base() SDF3 {
 	baseCutout = Transform3D(baseCutout, m)
 	side := magnetDiam + 2*metalMargin
 	big := 10 * utronEdge
-	boxCutout := Box3D(V3{side, big, side}, 0)
+	boxCutout, err := Box3D(V3{side, big, side}, 0)
+	must(err)
 	m = Translate3d(V3{0, 0.5 * big, -0.5*side - 2*magnetHeight + ssHeight + metalMargin})
 	m = RotateY(-0.25 * math.Pi).Mul(m)
 	m = Translate3d(V3{0, 0, utronRadius}).Mul(m)
@@ -91,13 +100,17 @@ func main() {
 	halfMagnetUpper := Transform3D(halfMagnet, m)
 
 	trim := 1.0 // To separate each magnet into its own piece and prevent merging.
-	magnet1 := Cylinder3D(magnetHeight-trim, 0.5*magnetDiam, 1)
+	magnet1, err := Cylinder3D(magnetHeight-trim, 0.5*magnetDiam, 1)
+	must(err)
 	magnet1 = Transform3D(magnet1, Translate3d(V3{0, 0, -1.5 * magnetHeight}))
-	magnet2 := Cylinder3D(magnetHeight-trim, 0.5*magnetDiam, 1)
+	magnet2, err := Cylinder3D(magnetHeight-trim, 0.5*magnetDiam, 1)
+	must(err)
 	magnet2 = Transform3D(magnet2, Translate3d(V3{0, 0, -0.5 * magnetHeight}))
-	magnet3 := Cylinder3D(magnetHeight-trim, 0.5*magnetDiam, 1)
+	magnet3, err := Cylinder3D(magnetHeight-trim, 0.5*magnetDiam, 1)
+	must(err)
 	magnet3 = Transform3D(magnet3, Translate3d(V3{0, 0, 0.5 * magnetHeight}))
-	magnet4 := Cylinder3D(magnetHeight-trim, 0.5*magnetDiam, 1)
+	magnet4, err := Cylinder3D(magnetHeight-trim, 0.5*magnetDiam, 1)
+	must(err)
 	magnet4 = Transform3D(magnet4, Translate3d(V3{0, 0, 1.5 * magnetHeight}))
 	magnets := Union3D(magnet1, magnet2, magnet3, magnet4)
 	m = Translate3d(V3{-innerGap - magnetDiam, 0, 0})
@@ -106,13 +119,19 @@ func main() {
 	magnets = Transform3D(magnets, m)
 
 	s := Union3D(base, utronLower, utronUpper, halfMagnetLower, halfMagnetUpper, magnets, top)
-	RenderSTL(s, 800, "utron.stl")
+	render.ToSTL(s, "utron.stl", render.NewMarchingCubesOctree(800))
 
 	// Write out separate parts.
-	RenderSTL(base, 800, "base.stl")
-	RenderSTL(top, 800, "top.stl")
-	RenderSTL(utronLower, 800, "utron-lower.stl")
-	RenderSTL(utronUpper, 800, "utron-upper.stl")
-	RenderSTL(halfMagnetLower, 800, "magnet-lower.stl")
-	RenderSTL(halfMagnetUpper, 800, "magnet-upper.stl")
+	render.ToSTL(base, "base.stl", render.NewMarchingCubesOctree(800))
+	render.ToSTL(top, "top.stl", render.NewMarchingCubesOctree(800))
+	render.ToSTL(utronLower, "utron-lower.stl", render.NewMarchingCubesOctree(800))
+	render.ToSTL(utronUpper, "utron-upper.stl", render.NewMarchingCubesOctree(800))
+	render.ToSTL(halfMagnetLower, "magnet-lower.stl", render.NewMarchingCubesOctree(800))
+	render.ToSTL(halfMagnetUpper, "magnet-upper.stl", render.NewMarchingCubesOctree(800))
+}
+
+func must(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
 }

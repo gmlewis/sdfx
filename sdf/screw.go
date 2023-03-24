@@ -20,7 +20,14 @@ clearance.
 
 package sdf
 
-import "math"
+import (
+	"fmt"
+	"log"
+	"math"
+
+	v2 "github.com/gmlewis/sdfx/vec/v2"
+	v3 "github.com/gmlewis/sdfx/vec/v3"
+)
 
 //-----------------------------------------------------------------------------
 // Thread Database - lookup standard screw threads by name
@@ -30,6 +37,7 @@ type ThreadParameters struct {
 	Name         string  // name of screw thread
 	Radius       float64 // nominal major radius of screw
 	Pitch        float64 // thread to thread distance of screw
+	Taper        float64 // thread taper (radians)
 	HexFlat2Flat float64 // hex head flat to flat distance
 	Units        string  // "inch" or "mm"
 }
@@ -45,6 +53,9 @@ func (m threadDatabase) UTSAdd(
 	tpi float64, // threads per inch
 	ftof float64, // hex head flat to flat distance
 ) {
+	if ftof <= 0 {
+		log.Panicf("bad flat to flat distance for thread \"%s\"", name)
+	}
 	t := ThreadParameters{}
 	t.Name = name
 	t.Radius = diameter / 2.0
@@ -61,12 +72,35 @@ func (m threadDatabase) ISOAdd(
 	pitch float64, // thread pitch
 	ftof float64, // hex head flat to flat distance
 ) {
+	if ftof <= 0 {
+		log.Panicf("bad flat to flat distance for thread \"%s\"", name)
+	}
 	t := ThreadParameters{}
 	t.Name = name
 	t.Radius = diameter / 2.0
 	t.Pitch = pitch
 	t.HexFlat2Flat = ftof
 	t.Units = "mm"
+	m[name] = &t
+}
+
+// NPTAdd adds an National Pipe Thread to the thread database.
+func (m threadDatabase) NPTAdd(
+	name string, // thread name
+	diameter float64, // screw major diameter
+	tpi float64, // threads per inch
+	ftof float64, // hex head flat to flat distance
+) {
+	if ftof <= 0 {
+		log.Panicf("bad flat to flat distance for thread \"%s\"", name)
+	}
+	t := ThreadParameters{}
+	t.Name = name
+	t.Radius = diameter / 2.0
+	t.Pitch = 1.0 / tpi
+	t.Taper = math.Atan(1.0 / 32.0)
+	t.HexFlat2Flat = ftof
+	t.Units = "inch"
 	m[name] = &t
 }
 
@@ -95,9 +129,24 @@ func initThreadLookup() threadDatabase {
 	m.UTSAdd("unf_3/4", 3.0/4.0, 16, 9.0/8.0)
 	m.UTSAdd("unf_7/8", 7.0/8.0, 14, 21.0/16.0)
 	m.UTSAdd("unf_1", 1.0, 12, 3.0/2.0)
+
+	// National Pipe Thread. Face to face distance taken from ASME B16.11 Plug Manufacturer (mm)
+	m.NPTAdd("npt_1/8", 0.405, 27, 11.2*InchesPerMillimetre)
+	m.NPTAdd("npt_1/4", 0.540, 18, 15.7*InchesPerMillimetre)
+	m.NPTAdd("npt_3/8", 0.675, 18, 17.5*InchesPerMillimetre)
+	m.NPTAdd("npt_1/2", 0.840, 14, 22.4*InchesPerMillimetre)
+	m.NPTAdd("npt_3/4", 1.050, 14, 26.9*InchesPerMillimetre)
+	m.NPTAdd("npt_1", 1.315, 11.5, 35.1*InchesPerMillimetre)
+	m.NPTAdd("npt_1_1/4", 1.660, 11.5, 44.5*InchesPerMillimetre)
+	m.NPTAdd("npt_1_1/2", 1.900, 11.5, 50.8*InchesPerMillimetre)
+	m.NPTAdd("npt_2", 2.375, 11.5, 63.5*InchesPerMillimetre)
+	m.NPTAdd("npt_2_1/2", 2.875, 8, 76.2*InchesPerMillimetre)
+	m.NPTAdd("npt_3", 3.500, 8, 88.9*InchesPerMillimetre)
+	m.NPTAdd("npt_4", 4.500, 8, 117.3*InchesPerMillimetre)
+
 	// ISO Coarse
-	m.ISOAdd("M1x0.25", 1, 0.25, -1)
-	m.ISOAdd("M1.2x0.25", 1.2, 0.25, -1)
+	m.ISOAdd("M1x0.25", 1, 0.25, 1.75)    // ftof?
+	m.ISOAdd("M1.2x0.25", 1.2, 0.25, 2.0) // ftof?
 	m.ISOAdd("M1.6x0.35", 1.6, 0.35, 3.2)
 	m.ISOAdd("M2x0.4", 2, 0.4, 4)
 	m.ISOAdd("M2.5x0.45", 2.5, 0.45, 5)
@@ -118,8 +167,8 @@ func initThreadLookup() threadDatabase {
 	m.ISOAdd("M56x5.5", 56, 5.5, 85)
 	m.ISOAdd("M64x6", 64, 6, 95)
 	// ISO Fine
-	m.ISOAdd("M1x0.2", 1, 0.2, -1)
-	m.ISOAdd("M1.2x0.2", 1.2, 0.2, -1)
+	m.ISOAdd("M1x0.2", 1, 0.2, 1.75)    // ftof?
+	m.ISOAdd("M1.2x0.2", 1.2, 0.2, 2.0) // ftof?
 	m.ISOAdd("M1.6x0.2", 1.6, 0.2, 3.2)
 	m.ISOAdd("M2x0.25", 2, 0.25, 4)
 	m.ISOAdd("M2.5x0.35", 2.5, 0.35, 5)
@@ -143,19 +192,15 @@ func initThreadLookup() threadDatabase {
 }
 
 // ThreadLookup lookups the parameters for a thread by name.
-func ThreadLookup(name string) *ThreadParameters {
-	t, ok := threadDB[name]
-	if !ok {
-		panic("thread name not found")
+func ThreadLookup(name string) (*ThreadParameters, error) {
+	if t, ok := threadDB[name]; ok {
+		return t, nil
 	}
-	return t
+	return nil, fmt.Errorf("thread \"%s\" not found", name)
 }
 
 // HexRadius returns the hex head radius.
 func (t *ThreadParameters) HexRadius() float64 {
-	if t.HexFlat2Flat < 0 {
-		panic("no hex head flat to flat distance defined for this thread")
-	}
 	return t.HexFlat2Flat / (2.0 * math.Cos(DtoR(30)))
 }
 
@@ -171,7 +216,7 @@ func (t *ThreadParameters) HexHeight() float64 {
 func AcmeThread(
 	radius float64, // radius of thread
 	pitch float64, // thread to thread distance
-) SDF2 {
+) (SDF2, error) {
 
 	h := radius - 0.5*pitch
 	theta := DtoR(29.0 / 2.0)
@@ -189,7 +234,6 @@ func AcmeThread(
 	acme.Add(-radius, h)
 	acme.Add(-radius, 0)
 
-	//acme.Render("acme.dxf")
 	return Polygon2D(acme.Vertices())
 }
 
@@ -199,8 +243,8 @@ func AcmeThread(
 func ISOThread(
 	radius float64, // radius of thread
 	pitch float64, // thread to thread distance
-	mode string, // internal/external thread
-) SDF2 {
+	external bool, // external (or internal) thread
+) (SDF2, error) {
 
 	theta := DtoR(30.0)
 	h := pitch / (2.0 * math.Tan(theta))
@@ -208,7 +252,7 @@ func ISOThread(
 	r0 := rMajor - (7.0/8.0)*h
 
 	iso := NewPolygon()
-	if mode == "external" {
+	if external {
 		rRoot := (pitch / 8.0) / math.Cos(theta)
 		xOfs := (1.0 / 16.0) * pitch
 		iso.Add(pitch, 0)
@@ -219,7 +263,7 @@ func ISOThread(
 		iso.Add(-pitch/2.0, r0).Smooth(rRoot, 5)
 		iso.Add(-pitch, r0+h)
 		iso.Add(-pitch, 0)
-	} else if mode == "internal" {
+	} else {
 		rMinor := r0 + (1.0/4.0)*h
 		rCrest := (pitch / 16.0) / math.Cos(theta)
 		xOfs := (1.0 / 8.0) * pitch
@@ -230,10 +274,7 @@ func ISOThread(
 		iso.Add(-pitch/2+xOfs, rMinor)
 		iso.Add(-pitch, rMinor)
 		iso.Add(-pitch, 0)
-	} else {
-		panic("bad mode")
 	}
-	//iso.Render("iso.dxf")
 	return Polygon2D(iso.Vertices())
 }
 
@@ -243,7 +284,7 @@ func ISOThread(
 func ANSIButtressThread(
 	radius float64, // radius of thread
 	pitch float64, // thread to thread distance
-) SDF2 {
+) (SDF2, error) {
 	t0 := math.Tan(DtoR(45.0))
 	t1 := math.Tan(DtoR(7.0))
 	b := 0.6 // thread engagement
@@ -261,7 +302,6 @@ func ANSIButtressThread(
 	tp.Add(-pitch, radius)
 	tp.Add(-pitch, 0)
 
-	//tp.Render("buttress.dxf")
 	return Polygon2D(tp.Vertices())
 }
 
@@ -270,7 +310,7 @@ func ANSIButtressThread(
 func PlasticButtressThread(
 	radius float64, // radius of thread
 	pitch float64, // thread to thread distance
-) SDF2 {
+) (SDF2, error) {
 	t0 := math.Tan(DtoR(45.0))
 	t1 := math.Tan(DtoR(7.0))
 	b := 0.6 // thread engagement
@@ -288,7 +328,6 @@ func PlasticButtressThread(
 	tp.Add(-pitch, radius)
 	tp.Add(-pitch, 0)
 
-	//tp.Render("buttress.dxf")
 	return Polygon2D(tp.Vertices())
 }
 
@@ -300,6 +339,7 @@ type ScrewSDF3 struct {
 	pitch  float64 // thread to thread distance
 	lead   float64 // distance per turn (starts * pitch)
 	length float64 // total length of screw
+	taper  float64 // thread taper angle
 	starts int     // number of thread starts
 	bb     Box3    // bounding box
 }
@@ -308,28 +348,50 @@ type ScrewSDF3 struct {
 func Screw3D(
 	thread SDF2, // 2D thread profile
 	length float64, // length of screw
+	taper float64, // thread taper angle (radians)
 	pitch float64, // thread to thread distance
 	starts int, // number of thread starts (< 0 for left hand threads)
-) SDF3 {
+) (SDF3, error) {
+	if thread == nil {
+		return nil, ErrMsg("thread == nil")
+	}
+	if length <= 0 {
+		return nil, ErrMsg("length <= 0")
+	}
+	if taper < 0 {
+		return nil, ErrMsg("taper < 0")
+	}
+	if taper >= Pi*0.5 {
+		return nil, ErrMsg("taper >= Pi * 0.5")
+	}
+	if pitch <= 0 {
+		return nil, ErrMsg("pitch <= 0")
+	}
 	s := ScrewSDF3{}
 	s.thread = thread
 	s.pitch = pitch
 	s.length = length / 2
+	s.taper = taper
 	s.lead = -pitch * float64(starts)
 	// Work out the bounding box.
 	// The max-y axis of the sdf2 bounding box is the radius of the thread.
 	bb := s.thread.BoundingBox()
 	r := bb.Max.Y
-	s.bb = Box3{V3{-r, -r, -s.length}, V3{r, r, s.length}}
-	return &s
+	// add the taper increment
+	r += s.length * math.Tan(taper)
+	s.bb = Box3{v3.Vec{-r, -r, -s.length}, v3.Vec{r, r, s.length}}
+	return &s, nil
 }
 
 // Evaluate returns the minimum distance to a 3d screw form.
-func (s *ScrewSDF3) Evaluate(p V3) float64 {
+func (s *ScrewSDF3) Evaluate(p v3.Vec) float64 {
 	// map the 3d point back to the xy space of the profile
-	p0 := V2{}
+	p0 := v2.Vec{}
 	// the distance from the 3d z-axis maps to the 2d y-axis
 	p0.Y = math.Sqrt(p.X*p.X + p.Y*p.Y)
+	if s.taper != 0 {
+		p0.Y += p.Z * math.Atan(s.taper)
+	}
 	// the x/y angle and the z-height map to the 2d x-axis
 	// ie: the position along thread pitch
 	theta := math.Atan2(p.Y, p.X)
@@ -338,9 +400,9 @@ func (s *ScrewSDF3) Evaluate(p V3) float64 {
 	// get the thread profile distance
 	d0 := s.thread.Evaluate(p0)
 	// create a region for the screw length
-	d1 := Abs(p.Z) - s.length
+	d1 := math.Abs(p.Z) - s.length
 	// return the intersection
-	return Max(d0, d1)
+	return math.Max(d0, d1)
 }
 
 // BoundingBox returns the bounding box for a 3d screw form.

@@ -10,6 +10,9 @@ package sdf
 
 import (
 	"math"
+
+	v2 "github.com/gmlewis/sdfx/vec/v2"
+	v3 "github.com/gmlewis/sdfx/vec/v3"
 )
 
 //-----------------------------------------------------------------------------
@@ -109,7 +112,7 @@ func Identity() M22 {
 }
 
 // Translate3d returns a 4x4 translation matrix.
-func Translate3d(v V3) M44 {
+func Translate3d(v v3.Vec) M44 {
 	return M44{
 		1, 0, 0, v.X,
 		0, 1, 0, v.Y,
@@ -118,7 +121,7 @@ func Translate3d(v V3) M44 {
 }
 
 // Translate2d returns a 3x3 translation matrix.
-func Translate2d(v V2) M33 {
+func Translate2d(v v2.Vec) M33 {
 	return M33{
 		1, 0, v.X,
 		0, 1, v.Y,
@@ -127,7 +130,7 @@ func Translate2d(v V2) M33 {
 
 // Scale3d returns a 4x4 scaling matrix.
 // Scaling does not preserve distance. See: ScaleUniform3D()
-func Scale3d(v V3) M44 {
+func Scale3d(v v3.Vec) M44 {
 	return M44{
 		v.X, 0, 0, 0,
 		0, v.Y, 0, 0,
@@ -137,7 +140,7 @@ func Scale3d(v V3) M44 {
 
 // Scale2d returns a 3x3 scaling matrix.
 // Scaling does not preserve distance. See: ScaleUniform2D().
-func Scale2d(v V2) M33 {
+func Scale2d(v v2.Vec) M33 {
 	return M33{
 		v.X, 0, 0,
 		0, v.Y, 0,
@@ -145,7 +148,7 @@ func Scale2d(v V2) M33 {
 }
 
 // Rotate3d returns an orthographic 4x4 rotation matrix (right hand rule).
-func Rotate3d(v V3, a float64) M44 {
+func Rotate3d(v v3.Vec, a float64) M44 {
 	v = v.Normalize()
 	s := math.Sin(a)
 	c := math.Cos(a)
@@ -159,17 +162,35 @@ func Rotate3d(v V3, a float64) M44 {
 
 // RotateX returns a 4x4 matrix with rotation about the X axis.
 func RotateX(a float64) M44 {
-	return Rotate3d(V3{1, 0, 0}, a)
+	return Rotate3d(v3.Vec{1, 0, 0}, a)
 }
 
 // RotateY returns a 4x4 matrix with rotation about the Y axis.
 func RotateY(a float64) M44 {
-	return Rotate3d(V3{0, 1, 0}, a)
+	return Rotate3d(v3.Vec{0, 1, 0}, a)
 }
 
 // RotateZ returns a 4x4 matrix with rotation about the Z axis.
 func RotateZ(a float64) M44 {
-	return Rotate3d(V3{0, 0, 1}, a)
+	return Rotate3d(v3.Vec{0, 0, 1}, a)
+}
+
+// MirrorXY returns a 4x4 matrix with mirroring across the XY plane.
+func MirrorXY() M44 {
+	return M44{
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, -1, 0,
+		0, 0, 0, 1}
+}
+
+// MirrorXZ returns a 4x4 matrix with mirroring across the XZ plane.
+func MirrorXZ() M44 {
+	return M44{
+		1, 0, 0, 0,
+		0, -1, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1}
 }
 
 // MirrorYZ returns a 4x4 matrix with mirroring across the YZ plane.
@@ -179,6 +200,31 @@ func MirrorYZ() M44 {
 		0, 1, 0, 0,
 		0, 0, 1, 0,
 		0, 0, 0, 1}
+}
+
+// MirrorXeqY returns a 4x4 matrix with mirroring across the X == Y plane.
+func MirrorXeqY() M44 {
+	return M44{
+		0, 1, 0, 0,
+		1, 0, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1}
+}
+
+// MirrorX returns a 3x3 matrix with mirroring across the X axis.
+func MirrorX() M33 {
+	return M33{
+		1, 0, 0,
+		0, -1, 0,
+		0, 0, 1}
+}
+
+// MirrorY returns a 3x3 matrix with mirroring across the Y axis.
+func MirrorY() M33 {
+	return M33{
+		-1, 0, 0,
+		0, 1, 0,
+		0, 0, 1}
 }
 
 // Rotate2d returns an orthographic 3x3 rotation matrix (right hand rule).
@@ -201,81 +247,116 @@ func Rotate(a float64) M22 {
 	}
 }
 
+// RotateToVector returns the rotation matrix that transforms a onto the same direction as b.
+func RotateToVector(a, b v3.Vec) M44 {
+	// is either vector == 0?
+	if a.Equals(v3.Vec{}, epsilon) || b.Equals(v3.Vec{}, epsilon) {
+		return Identity3d()
+	}
+	// normalize both vectors
+	a = a.Normalize()
+	b = b.Normalize()
+	// are the vectors the same?
+	if a.Equals(b, epsilon) {
+		return Identity3d()
+	}
+	// are the vectors opposite (180 degrees apart)?
+	if a.Neg().Equals(b, epsilon) {
+		return M44{
+			-1, 0, 0, 0,
+			0, -1, 0, 0,
+			0, 0, -1, 0,
+			0, 0, 0, 1}
+	}
+	// general case
+	// See:	https://math.stackexchange.com/questions/180418/calculate-rotation-matrix-to-align-vector-a-to-vector-b-in-3d
+	v := a.Cross(b)
+	k := 1 / (1 + a.Dot(b))
+	vx := M33{0, -v.Z, v.Y, v.Z, 0, -v.X, -v.Y, v.X, 0}
+	r := Identity2d().Add(vx).Add(vx.Mul(vx).MulScalar(k))
+	return M44{
+		r.x00, r.x01, r.x02, 0,
+		r.x10, r.x11, r.x12, 0,
+		r.x20, r.x21, r.x22, 0,
+		0, 0, 0, 1,
+	}
+}
+
 //-----------------------------------------------------------------------------
 
 // Equals tests the equality of 4x4 matrices.
 func (a M44) Equals(b M44, tolerance float64) bool {
-	return (Abs(a.x00-b.x00) < tolerance &&
-		Abs(a.x01-b.x01) < tolerance &&
-		Abs(a.x02-b.x02) < tolerance &&
-		Abs(a.x03-b.x03) < tolerance &&
-		Abs(a.x10-b.x10) < tolerance &&
-		Abs(a.x11-b.x11) < tolerance &&
-		Abs(a.x12-b.x12) < tolerance &&
-		Abs(a.x13-b.x13) < tolerance &&
-		Abs(a.x20-b.x20) < tolerance &&
-		Abs(a.x21-b.x21) < tolerance &&
-		Abs(a.x22-b.x22) < tolerance &&
-		Abs(a.x23-b.x23) < tolerance &&
-		Abs(a.x30-b.x30) < tolerance &&
-		Abs(a.x31-b.x31) < tolerance &&
-		Abs(a.x32-b.x32) < tolerance &&
-		Abs(a.x33-b.x33) < tolerance)
+	return (math.Abs(a.x00-b.x00) < tolerance &&
+		math.Abs(a.x01-b.x01) < tolerance &&
+		math.Abs(a.x02-b.x02) < tolerance &&
+		math.Abs(a.x03-b.x03) < tolerance &&
+		math.Abs(a.x10-b.x10) < tolerance &&
+		math.Abs(a.x11-b.x11) < tolerance &&
+		math.Abs(a.x12-b.x12) < tolerance &&
+		math.Abs(a.x13-b.x13) < tolerance &&
+		math.Abs(a.x20-b.x20) < tolerance &&
+		math.Abs(a.x21-b.x21) < tolerance &&
+		math.Abs(a.x22-b.x22) < tolerance &&
+		math.Abs(a.x23-b.x23) < tolerance &&
+		math.Abs(a.x30-b.x30) < tolerance &&
+		math.Abs(a.x31-b.x31) < tolerance &&
+		math.Abs(a.x32-b.x32) < tolerance &&
+		math.Abs(a.x33-b.x33) < tolerance)
 }
 
 // Equals tests the equality of 3x3 matrices.
 func (a M33) Equals(b M33, tolerance float64) bool {
-	return (Abs(a.x00-b.x00) < tolerance &&
-		Abs(a.x01-b.x01) < tolerance &&
-		Abs(a.x02-b.x02) < tolerance &&
-		Abs(a.x10-b.x10) < tolerance &&
-		Abs(a.x11-b.x11) < tolerance &&
-		Abs(a.x12-b.x12) < tolerance &&
-		Abs(a.x20-b.x20) < tolerance &&
-		Abs(a.x21-b.x21) < tolerance &&
-		Abs(a.x22-b.x22) < tolerance)
+	return (math.Abs(a.x00-b.x00) < tolerance &&
+		math.Abs(a.x01-b.x01) < tolerance &&
+		math.Abs(a.x02-b.x02) < tolerance &&
+		math.Abs(a.x10-b.x10) < tolerance &&
+		math.Abs(a.x11-b.x11) < tolerance &&
+		math.Abs(a.x12-b.x12) < tolerance &&
+		math.Abs(a.x20-b.x20) < tolerance &&
+		math.Abs(a.x21-b.x21) < tolerance &&
+		math.Abs(a.x22-b.x22) < tolerance)
 }
 
 // Equals tests the equality of 2x2 matrices.
 func (a M22) Equals(b M22, tolerance float64) bool {
-	return (Abs(a.x00-b.x00) < tolerance &&
-		Abs(a.x01-b.x01) < tolerance &&
-		Abs(a.x10-b.x10) < tolerance &&
-		Abs(a.x11-b.x11) < tolerance)
+	return (math.Abs(a.x00-b.x00) < tolerance &&
+		math.Abs(a.x01-b.x01) < tolerance &&
+		math.Abs(a.x10-b.x10) < tolerance &&
+		math.Abs(a.x11-b.x11) < tolerance)
 }
 
 //-----------------------------------------------------------------------------
 
-// MulPosition multiplies a V3 position with a rotate/translate matrix.
-func (a M44) MulPosition(b V3) V3 {
-	return V3{a.x00*b.X + a.x01*b.Y + a.x02*b.Z + a.x03,
+// MulPosition multiplies a v3.Vec position with a rotate/translate matrix.
+func (a M44) MulPosition(b v3.Vec) v3.Vec {
+	return v3.Vec{a.x00*b.X + a.x01*b.Y + a.x02*b.Z + a.x03,
 		a.x10*b.X + a.x11*b.Y + a.x12*b.Z + a.x13,
 		a.x20*b.X + a.x21*b.Y + a.x22*b.Z + a.x23}
 }
 
-// MulPosition multiplies a V2 position with a rotate/translate matrix.
-func (a M33) MulPosition(b V2) V2 {
-	return V2{a.x00*b.X + a.x01*b.Y + a.x02,
+// MulPosition multiplies a v2.Vec position with a rotate/translate matrix.
+func (a M33) MulPosition(b v2.Vec) v2.Vec {
+	return v2.Vec{a.x00*b.X + a.x01*b.Y + a.x02,
 		a.x10*b.X + a.x11*b.Y + a.x12}
 }
 
-// MulPosition multiplies a V2 position with a rotate matrix.
-func (a M22) MulPosition(b V2) V2 {
-	return V2{a.x00*b.X + a.x01*b.Y,
+// MulPosition multiplies a v2.Vec position with a rotate matrix.
+func (a M22) MulPosition(b v2.Vec) v2.Vec {
+	return v2.Vec{a.x00*b.X + a.x01*b.Y,
 		a.x10*b.X + a.x11*b.Y}
 }
 
 //-----------------------------------------------------------------------------
 
-// MulVertices multiples a set of V2 vertices by a rotate/translate matrix.
-func (v V2Set) MulVertices(a M33) {
+// mulVertices2 multiples a set of v2.Vec vertices by a rotate/translate matrix.
+func mulVertices2(v v2.VecSet, a M33) {
 	for i := range v {
 		v[i] = a.MulPosition(v[i])
 	}
 }
 
-// MulVertices multiples a set of V3 vertices by a rotate/translate matrix.
-func (v V3Set) MulVertices(a M44) {
+// mulVertices3 multiples a set of v3.Vec vertices by a rotate/translate matrix.
+func mulVertices3(v v3.VecSet, a M44) {
 	for i := range v {
 		v[i] = a.MulPosition(v[i])
 	}
@@ -331,15 +412,49 @@ func (a M22) Mul(b M22) M22 {
 }
 
 //-----------------------------------------------------------------------------
+
+// Add two 3x3 matrices.
+func (a M33) Add(b M33) M33 {
+	return M33{
+		x00: a.x00 + b.x00,
+		x10: a.x10 + b.x10,
+		x20: a.x20 + b.x20,
+		x01: a.x01 + b.x01,
+		x11: a.x11 + b.x11,
+		x21: a.x21 + b.x21,
+		x02: a.x02 + b.x02,
+		x12: a.x12 + b.x12,
+		x22: a.x22 + b.x22,
+	}
+}
+
+//-----------------------------------------------------------------------------
+
+// MulScalar multiplies each 3x3 matrix component by a scalar.
+func (a M33) MulScalar(k float64) M33 {
+	return M33{
+		x00: k * a.x00,
+		x10: k * a.x10,
+		x20: k * a.x20,
+		x01: k * a.x01,
+		x11: k * a.x11,
+		x21: k * a.x21,
+		x02: k * a.x02,
+		x12: k * a.x12,
+		x22: k * a.x22,
+	}
+}
+
+//-----------------------------------------------------------------------------
 // Transform bounding boxes - keep them axis aligned
 // http://dev.theomader.com/transform-bounding-boxes/
 
 // MulBox rotates/translates a 3d bounding box and resizes for axis-alignment.
 func (a M44) MulBox(box Box3) Box3 {
-	r := V3{a.x00, a.x10, a.x20}
-	u := V3{a.x01, a.x11, a.x21}
-	b := V3{a.x02, a.x12, a.x22}
-	t := V3{a.x03, a.x13, a.x23}
+	r := v3.Vec{a.x00, a.x10, a.x20}
+	u := v3.Vec{a.x01, a.x11, a.x21}
+	b := v3.Vec{a.x02, a.x12, a.x22}
+	t := v3.Vec{a.x03, a.x13, a.x23}
 	xa := r.MulScalar(box.Min.X)
 	xb := r.MulScalar(box.Max.X)
 	ya := u.MulScalar(box.Min.Y)
@@ -356,9 +471,9 @@ func (a M44) MulBox(box Box3) Box3 {
 
 // MulBox rotates/translates a 2d bounding box and resizes for axis-alignment.
 func (a M33) MulBox(box Box2) Box2 {
-	r := V2{a.x00, a.x10}
-	u := V2{a.x01, a.x11}
-	t := V2{a.x02, a.x12}
+	r := v2.Vec{a.x00, a.x10}
+	u := v2.Vec{a.x01, a.x11}
+	t := v2.Vec{a.x02, a.x12}
 	xa := r.MulScalar(box.Min.X)
 	xb := r.MulScalar(box.Max.X)
 	ya := u.MulScalar(box.Min.Y)

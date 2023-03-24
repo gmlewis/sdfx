@@ -1,13 +1,44 @@
+//-----------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
+
 package main
 
 import (
-	. "github.com/deadsy/sdfx/sdf"
+	"log"
+
+	"github.com/gmlewis/sdfx/render"
 )
 
+//-----------------------------------------------------------------------------
+
 func main() {
-	RenderSTL(cc16a(), 200, "cc16a.stl")
-	RenderSTL(cc16b(), 200, "cc16b.stl")
+
+	s, err := cc16a()
+	if err != nil {
+		log.Fatalf("error: %s", err)
+	}
+	render.ToSTL(s, "cc16a.stl", render.NewMarchingCubesOctree(200))
+
+	s, err = cc16b()
+	if err != nil {
+		log.Fatalf("error: %s", err)
+	}
+	render.ToSTL(s, "cc16b.stl", render.NewMarchingCubesOctree(200))
+
 	cc18a()
-	RenderSTL(cc18b(), 200, "cc18b.stl")
-	RenderSTL(cc18c(), 200, "cc18c.stl")
+
+	s, err = cc18b()
+	if err != nil {
+		log.Fatalf("error: %s", err)
+	}
+	render.ToSTL(s, "cc18b.stl", render.NewMarchingCubesOctree(200))
+
+	s, err = cc18c()
+	if err != nil {
+		log.Fatalf("error: %s", err)
+	}
+	render.ToSTL(s, "cc18c.stl", render.NewMarchingCubesOctree(200))
 }
+
+//-----------------------------------------------------------------------------

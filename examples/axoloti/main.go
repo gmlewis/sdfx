@@ -8,7 +8,16 @@ Axoloti Board Mounting Kit
 
 package main
 
-import . "github.com/deadsy/sdfx/sdf"
+import (
+	"log"
+
+	"github.com/gmlewis/sdfx/obj"
+	"github.com/gmlewis/sdfx/render"
+	"github.com/gmlewis/sdfx/sdf"
+	"github.com/gmlewis/sdfx/vec/conv"
+	v2 "github.com/gmlewis/sdfx/vec/v2"
+	v3 "github.com/gmlewis/sdfx/vec/v3"
+)
 
 //-----------------------------------------------------------------------------
 
@@ -18,29 +27,29 @@ var shrink = 1.0 / 0.999 // PLA ~0.1%
 
 //-----------------------------------------------------------------------------
 
-var frontPanelThickness = 3.0
-var frontPanelLength = 170.0
-var frontPanelHeight = 50.0
-var frontPanelYOffset = 15.0
+const frontPanelThickness = 3.0
+const frontPanelLength = 170.0
+const frontPanelHeight = 50.0
+const frontPanelYOffset = 15.0
 
-var baseWidth = 50.0
-var baseLength = 170.0
-var baseThickness = 3.0
+const baseWidth = 50.0
+const baseLength = 170.0
+const baseThickness = 3.0
 
-var baseFootWidth = 10.0
-var baseFootCornerRadius = 3.0
+const baseFootWidth = 10.0
+const baseFootCornerRadius = 3.0
 
-var pcbWidth = 50.0
-var pcbLength = 160.0
+const pcbWidth = 50.0
+const pcbLength = 160.0
 
-var pillarHeight = 16.8
+const pillarHeight = 16.8
 
 //-----------------------------------------------------------------------------
 
 // multiple standoffs
-func standoffs() SDF3 {
+func standoffs() (sdf.SDF3, error) {
 
-	k := &StandoffParms{
+	k := &obj.StandoffParms{
 		PillarHeight:   pillarHeight,
 		PillarDiameter: 6.0,
 		HoleDepth:      10.0,
@@ -50,7 +59,7 @@ func standoffs() SDF3 {
 	zOfs := 0.5 * (pillarHeight + baseThickness)
 
 	// from the board mechanicals
-	positions := V3Set{
+	positions := v3.VecSet{
 		{3.5, 10.0, zOfs},   // H1
 		{3.5, 40.0, zOfs},   // H2
 		{54.0, 40.0, zOfs},  // H3
@@ -61,153 +70,185 @@ func standoffs() SDF3 {
 		{116.0, 10.0, zOfs}, // H8
 	}
 
-	return Standoffs3D(k, positions)
+	s, err := obj.Standoff3D(k)
+	if err != nil {
+		return nil, err
+	}
+	return sdf.Multi3D(s, positions), nil
 }
 
 //-----------------------------------------------------------------------------
 
 // base returns the base mount.
-func base() SDF3 {
+func base() (sdf.SDF3, error) {
 	// base
-	pp := &PanelParms{
-		Size:         V2{baseLength, baseWidth},
+	pp := &obj.PanelParms{
+		Size:         v2.Vec{baseLength, baseWidth},
 		CornerRadius: 5.0,
 		HoleDiameter: 3.5,
 		HoleMargin:   [4]float64{7.0, 20.0, 7.0, 20.0},
 		HolePattern:  [4]string{"xx", "x", "xx", "x"},
 	}
-	s0 := Panel2D(pp)
+	s0, err := obj.Panel2D(pp)
+	if err != nil {
+		return nil, err
+	}
 
 	// cutout
 	l := baseLength - (2.0 * baseFootWidth)
 	w := 18.0
-	s1 := Box2D(V2{l, w}, baseFootCornerRadius)
+	s1 := sdf.Box2D(v2.Vec{l, w}, baseFootCornerRadius)
 	yOfs := 0.5 * (baseWidth - pcbWidth)
-	s1 = Transform2D(s1, Translate2d(V2{0, yOfs}))
+	s1 = sdf.Transform2D(s1, sdf.Translate2d(v2.Vec{0, yOfs}))
 
-	s2 := Extrude3D(Difference2D(s0, s1), baseThickness)
+	s2 := sdf.Extrude3D(sdf.Difference2D(s0, s1), baseThickness)
 	xOfs := 0.5 * pcbLength
 	yOfs = pcbWidth - (0.5 * baseWidth)
-	s2 = Transform3D(s2, Translate3d(V3{xOfs, yOfs, 0}))
+	s2 = sdf.Transform3D(s2, sdf.Translate3d(v3.Vec{xOfs, yOfs, 0}))
 
 	// standoffs
-	s3 := standoffs()
+	s3, err := standoffs()
+	if err != nil {
+		return nil, err
+	}
 
-	s4 := Union3D(s2, s3)
-	s4.(*UnionSDF3).SetMin(PolyMin(3.0))
+	s4 := sdf.Union3D(s2, s3)
+	s4.(*sdf.UnionSDF3).SetMin(sdf.PolyMin(3.0))
 
-	return s4
+	return s4, nil
 }
 
 //-----------------------------------------------------------------------------
 // front panel cutouts
 
 type panelHole struct {
-	center V2   // center of hole
-	hole   SDF2 // 2d hole
+	center v2.Vec   // center of hole
+	hole   sdf.SDF2 // 2d hole
 }
 
 // button positions
-var pbX = 53.0
-var pb0 = V2{pbX, 0.8}
-var pb1 = V2{pbX + 5.334, 0.8}
+const pbX = 53.0
+
+var pb0 = v2.Vec{pbX, 0.8}
+var pb1 = v2.Vec{pbX + 5.334, 0.8}
 
 // panelCutouts returns the 2D front panel cutouts
-func panelCutouts() SDF2 {
+func panelCutouts() (sdf.SDF2, error) {
 
-	sMidi := Circle2D(0.5 * 17.0)
-	sJack := Circle2D(0.5 * 11.5)
-	sLed := Box2D(V2{1.6, 1.6}, 0)
+	sMidi, err := sdf.Circle2D(0.5 * 17.0)
+	if err != nil {
+		return nil, err
+	}
+	sJack0, err := sdf.Circle2D(0.5 * 11.5)
+	if err != nil {
+		return nil, err
+	}
+	sJack1, err := sdf.Circle2D(0.5 * 5.5)
+	if err != nil {
+		return nil, err
+	}
 
-	fb := &FingerButtonParms{
+	sLed := sdf.Box2D(v2.Vec{1.6, 1.6}, 0)
+
+	k := obj.FingerButtonParms{
 		Width:  4.0,
 		Gap:    0.6,
 		Length: 20.0,
 	}
-	sButton := Transform2D(FingerButton2D(fb), Rotate2d(DtoR(-90)))
+	fb, err := obj.FingerButton2D(&k)
+	if err != nil {
+		return nil, err
+	}
+	sButton := sdf.Transform2D(fb, sdf.Rotate2d(sdf.DtoR(-90)))
 
 	jackX := 123.0
 	midiX := 18.8
 	ledX := 62.9
 
 	holes := []panelHole{
-		{V2{midiX, 10.2}, sMidi},                 // MIDI DIN Jack
-		{V2{midiX + 20.32, 10.2}, sMidi},         // MIDI DIN Jack
-		{V2{jackX, 8.14}, sJack},                 // 1/4" Stereo Jack
-		{V2{jackX + 19.5, 8.14}, sJack},          // 1/4" Stereo Jack
-		{V2{107.6, 2.3}, Circle2D(0.5 * 5.5)},    // 3.5 mm Headphone Jack
-		{V2{ledX, 0.5}, sLed},                    // LED
-		{V2{ledX + 3.635, 0.5}, sLed},            // LED
-		{pb0, sButton},                           // Push Button
-		{pb1, sButton},                           // Push Button
-		{V2{84.1, 1.0}, Box2D(V2{16.0, 7.5}, 0)}, // micro SD card
-		{V2{96.7, 1.0}, Box2D(V2{11.0, 7.5}, 0)}, // micro USB connector
-		{V2{73.1, 7.1}, Box2D(V2{7.5, 15.0}, 0)}, // fullsize USB connector
+		{v2.Vec{midiX, 10.2}, sMidi},                         // MIDI DIN Jack
+		{v2.Vec{midiX + 20.32, 10.2}, sMidi},                 // MIDI DIN Jack
+		{v2.Vec{jackX, 8.14}, sJack0},                        // 1/4" Stereo Jack
+		{v2.Vec{jackX + 19.5, 8.14}, sJack0},                 // 1/4" Stereo Jack
+		{v2.Vec{107.6, 2.3}, sJack1},                         // 3.5 mm Headphone Jack
+		{v2.Vec{ledX, 0.5}, sLed},                            // LED
+		{v2.Vec{ledX + 3.635, 0.5}, sLed},                    // LED
+		{pb0, sButton},                                       // Push Button
+		{pb1, sButton},                                       // Push Button
+		{v2.Vec{84.1, 1.0}, sdf.Box2D(v2.Vec{16.0, 7.5}, 0)}, // micro SD card
+		{v2.Vec{96.7, 1.0}, sdf.Box2D(v2.Vec{11.0, 7.5}, 0)}, // micro USB connector
+		{v2.Vec{73.1, 7.1}, sdf.Box2D(v2.Vec{7.5, 15.0}, 0)}, // fullsize USB connector
 	}
 
-	s := make([]SDF2, len(holes))
+	s := make([]sdf.SDF2, len(holes))
 	for i, k := range holes {
-		s[i] = Transform2D(k.hole, Translate2d(k.center))
+		s[i] = sdf.Transform2D(k.hole, sdf.Translate2d(k.center))
 	}
 
-	return Union2D(s...)
+	return sdf.Union2D(s...), nil
 }
 
 //-----------------------------------------------------------------------------
 
 // frontPanel returns the front panel mount.
-func frontPanel() SDF3 {
+func frontPanel() (sdf.SDF3, error) {
 
 	// overall panel
-	pp := &PanelParms{
-		Size:         V2{frontPanelLength, frontPanelHeight},
+	pp := &obj.PanelParms{
+		Size:         v2.Vec{frontPanelLength, frontPanelHeight},
 		CornerRadius: 5.0,
 		HoleDiameter: 3.5,
 		HoleMargin:   [4]float64{5.0, 5.0, 5.0, 5.0},
 		HolePattern:  [4]string{"xx", "x", "xx", "x"},
 	}
-	panel := Panel2D(pp)
+	panel, err := obj.Panel2D(pp)
+	if err != nil {
+		return nil, err
+	}
 
 	xOfs := 0.5 * pcbLength
 	yOfs := (0.5 * frontPanelHeight) - frontPanelYOffset
-	panel = Transform2D(panel, Translate2d(V2{xOfs, yOfs}))
+	panel = sdf.Transform2D(panel, sdf.Translate2d(v2.Vec{xOfs, yOfs}))
 
 	// extrude to 3d
-	fp := Extrude3D(Difference2D(panel, panelCutouts()), frontPanelThickness)
+	panelCutouts, err := panelCutouts()
+	if err != nil {
+		return nil, err
+	}
+	fp := sdf.Extrude3D(sdf.Difference2D(panel, panelCutouts), frontPanelThickness)
 
 	// Add buttons to the finger button
 	bHeight := 4.0
-	b := Cylinder3D(bHeight, 1.4, 0)
-	b0 := Transform3D(b, Translate3d(pb0.ToV3(-0.5*bHeight)))
-	b1 := Transform3D(b, Translate3d(pb1.ToV3(-0.5*bHeight)))
+	b, _ := sdf.Cylinder3D(bHeight, 1.4, 0)
+	b0 := sdf.Transform3D(b, sdf.Translate3d(conv.V2ToV3(pb0, -0.5*bHeight)))
+	b1 := sdf.Transform3D(b, sdf.Translate3d(conv.V2ToV3(pb1, -0.5*bHeight)))
 
-	return Union3D(fp, b0, b1)
-}
-
-//-----------------------------------------------------------------------------
-
-// mountingKit creates the STLs for the axoloti mount kit
-func mountingKit() {
-
-	// front panel
-	s0 := frontPanel()
-	sx := Transform3D(s0, RotateY(DtoR(180.0)))
-	RenderSTL(ScaleUniform3D(sx, shrink), 400, "panel.stl")
-
-	// base
-	s1 := base()
-	RenderSTL(ScaleUniform3D(s1, shrink), 400, "base.stl")
-
-	// both together
-	s0 = Transform3D(s0, Translate3d(V3{0, 80, 0}))
-	s3 := Union3D(s0, s1)
-	RenderSTL(ScaleUniform3D(s3, shrink), 400, "panel_and_base.stl")
+	return sdf.Union3D(fp, b0, b1), nil
 }
 
 //-----------------------------------------------------------------------------
 
 func main() {
-	mountingKit()
+
+	// front panel
+	s0, err := frontPanel()
+	if err != nil {
+		log.Fatalf("error: %s", err)
+	}
+	sx := sdf.Transform3D(s0, sdf.RotateY(sdf.DtoR(180.0)))
+	render.ToSTL(sdf.ScaleUniform3D(sx, shrink), "panel.stl", render.NewMarchingCubesOctree(400))
+
+	// base
+	s1, err := base()
+	if err != nil {
+		log.Fatalf("error: %s", err)
+	}
+	render.ToSTL(sdf.ScaleUniform3D(s1, shrink), "base.stl", render.NewMarchingCubesOctree(400))
+
+	// both together
+	s0 = sdf.Transform3D(s0, sdf.Translate3d(v3.Vec{0, 80, 0}))
+	s3 := sdf.Union3D(s0, s1)
+	render.ToSTL(sdf.ScaleUniform3D(s3, shrink), "panel_and_base.stl", render.NewMarchingCubesOctree(400))
 }
 
 //-----------------------------------------------------------------------------

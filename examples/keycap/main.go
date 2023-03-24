@@ -9,7 +9,11 @@ KeyCaps for Cherry MX key switches
 package main
 
 import (
-	"github.com/deadsy/sdfx/sdf"
+	"log"
+
+	"github.com/gmlewis/sdfx/render"
+	"github.com/gmlewis/sdfx/sdf"
+	v3 "github.com/gmlewis/sdfx/vec/v3"
 )
 
 //-----------------------------------------------------------------------------
@@ -29,13 +33,22 @@ const crossX = 4.0
 const stemRound = 0.05
 
 // keyStem returns a keycap stem of a given length.
-func keyStem(length float64) sdf.SDF3 {
+func keyStem(length float64) (sdf.SDF3, error) {
 	ofs := length - crossDepth
-	s0 := sdf.Box3D(sdf.V3{crossX, crossWidth, length}, crossX*stemRound)
-	s1 := sdf.Box3D(sdf.V3{crossWidth, stemY * (1.0 + 2.0*stemRound), length}, crossX*stemRound)
-	cavity := sdf.Transform3D(sdf.Union3D(s0, s1), sdf.Translate3d(sdf.V3{0, 0, ofs}))
-	stem := sdf.Box3D(sdf.V3{stemX, stemY, length}, stemX*stemRound)
-	return sdf.Difference3D(stem, cavity)
+	s0, err := sdf.Box3D(v3.Vec{crossX, crossWidth, length}, crossX*stemRound)
+	if err != nil {
+		return nil, err
+	}
+	s1, err := sdf.Box3D(v3.Vec{crossWidth, stemY * (1.0 + 2.0*stemRound), length}, crossX*stemRound)
+	if err != nil {
+		return nil, err
+	}
+	cavity := sdf.Transform3D(sdf.Union3D(s0, s1), sdf.Translate3d(v3.Vec{0, 0, ofs}))
+	stem, err := sdf.Box3D(v3.Vec{stemX, stemY, length}, stemX*stemRound)
+	if err != nil {
+		return nil, err
+	}
+	return sdf.Difference3D(stem, cavity), nil
 }
 
 //-----------------------------------------------------------------------------
@@ -43,28 +56,41 @@ func keyStem(length float64) sdf.SDF3 {
 const stemLength = 15.0
 
 // roundCap returns a round keycap.
-func roundCap(diameter, height, wall float64) sdf.SDF3 {
+func roundCap(diameter, height, wall float64) (sdf.SDF3, error) {
 	rOuter := 0.5 * diameter
 	rInner := 0.5 * (diameter - (2.0 * wall))
 
-	outer := sdf.Cylinder3D(height, rOuter, 0)
-	inner := sdf.Cylinder3D(height, rInner, 0)
-	inner = sdf.Transform3D(inner, sdf.Translate3d(sdf.V3{0, 0, wall}))
+	outer, err := sdf.Cylinder3D(height, rOuter, 0)
+	if err != nil {
+		return nil, err
+	}
 
+	inner, err := sdf.Cylinder3D(height, rInner, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	inner = sdf.Transform3D(inner, sdf.Translate3d(v3.Vec{0, 0, wall}))
 	keycap := sdf.Difference3D(outer, inner)
 
-	stem := keyStem(stemLength)
+	stem, err := keyStem(stemLength)
+	if err != nil {
+		return nil, err
+	}
 	ofs := (stemLength - height) * 0.5
-	stem = sdf.Transform3D(stem, sdf.Translate3d(sdf.V3{0, 0, ofs}))
+	stem = sdf.Transform3D(stem, sdf.Translate3d(v3.Vec{0, 0, ofs}))
 
-	return sdf.Union3D(keycap, stem)
+	return sdf.Union3D(keycap, stem), nil
 }
 
 //-----------------------------------------------------------------------------
 
 func main() {
-	s := roundCap(18, 6, 1.5)
-	sdf.RenderSTL(sdf.ScaleUniform3D(s, shrink), 150, "round_cap.stl")
+	s, err := roundCap(18, 6, 1.5)
+	if err != nil {
+		log.Fatalf("error: %s", err)
+	}
+	render.ToSTL(sdf.ScaleUniform3D(s, shrink), "round_cap.stl", render.NewMarchingCubesOctree(150))
 }
 
 //-----------------------------------------------------------------------------

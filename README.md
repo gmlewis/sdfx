@@ -1,6 +1,6 @@
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/deadsy/sdfx)](https://goreportcard.com/report/github.com/deadsy/sdfx)
-[![GoDoc](https://godoc.org/github.com/deadsy/sdfx?status.svg)](https://godoc.org/github.com/deadsy/sdfx/sdf)
+[![Go Report Card](https://goreportcard.com/badge/github.com/gmlewis/sdfx)](https://goreportcard.com/report/github.com/gmlewis/sdfx)
+[![GoDoc](https://godoc.org/github.com/gmlewis/sdfx?status.svg)](https://godoc.org/github.com/gmlewis/sdfx/sdf)
 
 # sdfx
 
@@ -8,30 +8,36 @@ A simple CAD package written in Go (https://golang.org/)
 
  * Objects are modelled with 2d and 3d signed distance functions (SDFs).
  * Objects are defined with Go code.
- * Objects are rendered to an STL file to be viewed and/or 3d printed.
+ * Objects are rendered to an STL/3MF file to be viewed and/or 3d printed.
 
 ## How To
  1. See the examples.
  2. Write some Go code to define your own object.
  3. Build and run the Go code.
- 4. Preview the STL output in an STL viewer (E.g. http://www.meshlab.net/)
- 5. Print the STL file if you like it enough.
+ 4. Preview the output in an 3d file viewer (e.g. http://www.meshlab.net/)
+ 5. Print the STL/3MF file if you like it enough.
+
+[SDF Viewer Go](https://github.com/Yeicor/sdf-viewer-go) or [SDFX-UI](https://github.com/Yeicor/sdfx-ui) allow faster development iterations, replacing steps 3 and 4 until the final build.
 
 ## Why?
  * SDFs make CSG easy.
  * As a language Golang > OpenSCAD.
- * It's hard to do filleting and chamfering with OpenSCAD.
- * SDFs can easily do filleting and chamfering.
+ * SDFs can easily do filleting and chamfering (hard to do with OpenSCAD).
  * SDFs are hackable to try out oddball ideas.
- * Who needs an interactive GUI?
+
+## Development
+ * [Roadmap](docs/ROADMAP.md)
 
 ## Gallery
 
 ![wheel](docs/gallery/wheel.png "Pottery Wheel Casting Pattern")
 ![core_box](docs/gallery/core_box.png "Pottery Wheel Core Box")
 ![cylinder_head](docs/gallery/head.png "Cylinder Head")
+![msquare](docs/gallery/msquare.png "M-Square Casting Pattern")
 ![axoloti](docs/gallery/axoloti.png "Axoloti Mount Kit")
 ![text](docs/gallery/text.png "TrueType font rendering")
+![gyroid](docs/gallery/gyroid.png "Gyroid Surface")
+![icosahedron](docs/gallery/icosahedron.png "Icosahedron")
 ![cc16a](docs/gallery/cc16a.png "Reddit CAD Challenge 16A")
 ![cc16b](docs/gallery/cc16b_0.png "Reddit CAD Challenge 16B")
 ![cc18b](docs/gallery/cc18b.png "Reddit CAD Challenge 18B")

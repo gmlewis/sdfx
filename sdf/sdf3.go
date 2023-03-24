@@ -9,14 +9,21 @@
 package sdf
 
 import (
+	"errors"
 	"math"
+
+	"github.com/gmlewis/sdfx/vec/conv"
+	"github.com/gmlewis/sdfx/vec/p2"
+	v2 "github.com/gmlewis/sdfx/vec/v2"
+	v3 "github.com/gmlewis/sdfx/vec/v3"
+	"github.com/gmlewis/sdfx/vec/v3i"
 )
 
 //-----------------------------------------------------------------------------
 
 // SDF3 is the interface to a 3d signed distance function object.
 type SDF3 interface {
-	Evaluate(p V3) float64
+	Evaluate(p v3.Vec) float64
 	BoundingBox() Box3
 }
 
@@ -24,25 +31,25 @@ type SDF3 interface {
 // Basic SDF Functions
 
 /*
-func sdfBox3d(p, s V3) float64 {
+func sdfBox3d(p, s v3.Vec) float64 {
 	d := p.Abs().Sub(s)
-	return d.Max(V3{0, 0, 0}).Length() + Min(d.MaxComponent(), 0)
+	return d.Max(v3.Vec{0, 0, 0}).Length() + Min(d.MaxComponent(), 0)
 }
 */
 
-func sdfBox3d(p, s V3) float64 {
+func sdfBox3d(p, s v3.Vec) float64 {
 	d := p.Abs().Sub(s)
 	if d.X > 0 && d.Y > 0 && d.Z > 0 {
 		return d.Length()
 	}
 	if d.X > 0 && d.Y > 0 {
-		return V2{d.X, d.Y}.Length()
+		return v2.Vec{d.X, d.Y}.Length()
 	}
 	if d.X > 0 && d.Z > 0 {
-		return V2{d.X, d.Z}.Length()
+		return v2.Vec{d.X, d.Z}.Length()
 	}
 	if d.Y > 0 && d.Z > 0 {
-		return V2{d.Y, d.Z}.Length()
+		return v2.Vec{d.Y, d.Z}.Length()
 	}
 	if d.X > 0 {
 		return d.X
@@ -62,65 +69,71 @@ func sdfBox3d(p, s V3) float64 {
 type SorSDF3 struct {
 	sdf   SDF2
 	theta float64 // angle for partial revolutions
-	norm  V2      // pre-calculated normal to theta line
+	norm  v2.Vec  // pre-calculated normal to theta line
 	bb    Box3
 }
 
 // RevolveTheta3D returns an SDF3 for a solid of revolution.
-func RevolveTheta3D(sdf SDF2, theta float64) SDF3 {
+func RevolveTheta3D(sdf SDF2, theta float64) (SDF3, error) {
+	if sdf == nil {
+		return nil, nil
+	}
+	if theta < 0 {
+		return nil, ErrMsg("theta < 0")
+	}
 	s := SorSDF3{}
 	s.sdf = sdf
 	// normalize theta
-	s.theta = math.Mod(Abs(theta), Tau)
+	s.theta = math.Mod(math.Abs(theta), Tau)
 	sin := math.Sin(s.theta)
 	cos := math.Cos(s.theta)
 	// pre-calculate the normal to the theta line
-	s.norm = V2{-sin, cos}
+	s.norm = v2.Vec{-sin, cos}
 	// work out the bounding box
-	var vset V2Set
+	var vset v2.VecSet
 	if s.theta == 0 {
-		vset = []V2{{1, 1}, {-1, -1}}
+		vset = []v2.Vec{{1, 1}, {-1, -1}}
 	} else {
-		vset = []V2{{0, 0}, {1, 0}, {cos, sin}}
+		vset = []v2.Vec{{0, 0}, {1, 0}, {cos, sin}}
 		if s.theta > 0.5*Pi {
-			vset = append(vset, V2{0, 1})
+			vset = append(vset, v2.Vec{0, 1})
 		}
 		if s.theta > Pi {
-			vset = append(vset, V2{-1, 0})
+			vset = append(vset, v2.Vec{-1, 0})
 		}
 		if s.theta > 1.5*Pi {
-			vset = append(vset, V2{0, -1})
+			vset = append(vset, v2.Vec{0, -1})
 		}
 	}
 	bb := s.sdf.BoundingBox()
-	l := Max(Abs(bb.Min.X), Abs(bb.Max.X))
+	l := math.Max(math.Abs(bb.Min.X), math.Abs(bb.Max.X))
 	vmin := vset.Min().MulScalar(l)
 	vmax := vset.Max().MulScalar(l)
-	s.bb = Box3{V3{vmin.X, vmin.Y, bb.Min.Y}, V3{vmax.X, vmax.Y, bb.Max.Y}}
-	return &s
+	s.bb = Box3{v3.Vec{vmin.X, vmin.Y, bb.Min.Y}, v3.Vec{vmax.X, vmax.Y, bb.Max.Y}}
+	return &s, nil
 }
 
 // Revolve3D returns an SDF3 for a solid of revolution.
-func Revolve3D(sdf SDF2) SDF3 {
+func Revolve3D(sdf SDF2) (SDF3, error) {
 	return RevolveTheta3D(sdf, 0)
 }
 
 // Evaluate returns the minimum distance to a solid of revolution.
-func (s *SorSDF3) Evaluate(p V3) float64 {
+func (s *SorSDF3) Evaluate(p v3.Vec) float64 {
 	x := math.Sqrt(p.X*p.X + p.Y*p.Y)
-	a := s.sdf.Evaluate(V2{x, p.Z})
+	a := s.sdf.Evaluate(v2.Vec{x, p.Z})
 	b := a
 	if s.theta != 0 {
 		// combine two vertical planes to give an intersection wedge
-		d := s.norm.Dot(V2{p.X, p.Y})
+		d := s.norm.Dot(v2.Vec{p.X, p.Y})
 		if s.theta < Pi {
-			b = Max(-p.Y, d) // intersect
+			b = math.Max(-p.Y, d) // intersect
 		} else {
-			b = Min(-p.Y, d) // union
+			b = math.Min(-p.Y, d) // union
 		}
 	}
 	// return the intersection
-	return Max(a, b)
+	return math.Max(a, b)
 }
 
 // BoundingBox returns the bounding box for a solid of revolution.
@@ -146,7 +159,7 @@ func Extrude3D(sdf SDF2, height float64) SDF3 {
 	s.extrude = NormalExtrude
 	// work out the bounding box
 	bb := sdf.BoundingBox()
-	s.bb = Box3{V3{bb.Min.X, bb.Min.Y, -s.height}, V3{bb.Max.X, bb.Max.Y, s.height}}
+	s.bb = Box3{v3.Vec{bb.Min.X, bb.Min.Y, -s.height}, v3.Vec{bb.Max.X, bb.Max.Y, s.height}}
 	return &s
 }
 
@@ -159,12 +172,12 @@ func TwistExtrude3D(sdf SDF2, height, twist float64) SDF3 {
 	// work out the bounding box
 	bb := sdf.BoundingBox()
 	l := bb.Max.Length()
-	s.bb = Box3{V3{-l, -l, -s.height}, V3{l, l, s.height}}
+	s.bb = Box3{v3.Vec{-l, -l, -s.height}, v3.Vec{l, l, s.height}}
 	return &s
 }
 
 // ScaleExtrude3D extrudes an SDF2 and scales it over the height of the extrusion.
-func ScaleExtrude3D(sdf SDF2, height float64, scale V2) SDF3 {
+func ScaleExtrude3D(sdf SDF2, height float64, scale v2.Vec) SDF3 {
 	s := ExtrudeSDF3{}
 	s.sdf = sdf
 	s.height = height / 2
@@ -172,12 +185,12 @@ func ScaleExtrude3D(sdf SDF2, height float64, scale V2) SDF3 {
 	// work out the bounding box
 	bb := sdf.BoundingBox()
 	bb = bb.Extend(Box2{bb.Min.Mul(scale), bb.Max.Mul(scale)})
-	s.bb = Box3{V3{bb.Min.X, bb.Min.Y, -s.height}, V3{bb.Max.X, bb.Max.Y, s.height}}
+	s.bb = Box3{v3.Vec{bb.Min.X, bb.Min.Y, -s.height}, v3.Vec{bb.Max.X, bb.Max.Y, s.height}}
 	return &s
 }
 
 // ScaleTwistExtrude3D extrudes an SDF2 and scales and twists it over the height of the extrusion.
-func ScaleTwistExtrude3D(sdf SDF2, height, twist float64, scale V2) SDF3 {
+func ScaleTwistExtrude3D(sdf SDF2, height, twist float64, scale v2.Vec) SDF3 {
 	s := ExtrudeSDF3{}
 	s.sdf = sdf
 	s.height = height / 2
@@ -186,18 +199,18 @@ func ScaleTwistExtrude3D(sdf SDF2, height, twist float64, scale V2) SDF3 {
 	bb := sdf.BoundingBox()
 	bb = bb.Extend(Box2{bb.Min.Mul(scale), bb.Max.Mul(scale)})
 	l := bb.Max.Length()
-	s.bb = Box3{V3{-l, -l, -s.height}, V3{l, l, s.height}}
+	s.bb = Box3{v3.Vec{-l, -l, -s.height}, v3.Vec{l, l, s.height}}
 	return &s
 }
 
 // Evaluate returns the minimum distance to an extrusion.
-func (s *ExtrudeSDF3) Evaluate(p V3) float64 {
+func (s *ExtrudeSDF3) Evaluate(p v3.Vec) float64 {
 	// sdf for the projected 2d surface
 	a := s.sdf.Evaluate(s.extrude(p))
 	// sdf for the extrusion region: z = [-height, height]
-	b := Abs(p.Z) - s.height
+	b := math.Abs(p.Z) - s.height
 	// return the intersection
-	return Max(a, b)
+	return math.Max(a, b)
 }
 
 // SetExtrude sets the extrusion control function.
@@ -223,30 +236,40 @@ type ExtrudeRoundedSDF3 struct {
 	bb     Box3
 }
 
-// ExtrudeRounded3D does a linear extrude ao SDF2 with rounded edges.
-func ExtrudeRounded3D(sdf SDF2, height, round float64) SDF3 {
-	if round == 0.0 {
+// ExtrudeRounded3D extrudes an SDF2 to an SDF3 with rounded edges.
+func ExtrudeRounded3D(sdf SDF2, height, round float64) (SDF3, error) {
+	if round == 0 {
 		// revert to non-rounded case
-		return Extrude3D(sdf, height)
+		return Extrude3D(sdf, height), nil
 	}
-	s := ExtrudeRoundedSDF3{}
-	s.sdf = sdf
-	s.height = (height / 2) - round
-	if s.height < 0 {
-		panic("height < 2 * round")
+	if sdf == nil {
+		return nil, errors.New("sdf == nil")
 	}
-	s.round = round
+	if height <= 0 {
+		return nil, errors.New("height <= 0")
+	}
+	if round < 0 {
+		return nil, errors.New("round < 0")
+	}
+	if height < 2*round {
+		return nil, errors.New("height < 2 * round")
+	}
+	s := ExtrudeRoundedSDF3{
+		sdf:    sdf,
+		height: (height / 2) - round,
+		round:  round,
+	}
 	// work out the bounding box
 	bb := sdf.BoundingBox()
-	s.bb = Box3{V3{bb.Min.X, bb.Min.Y, -s.height}.SubScalar(round), V3{bb.Max.X, bb.Max.Y, s.height}.AddScalar(round)}
-	return &s
+	s.bb = Box3{v3.Vec{bb.Min.X, bb.Min.Y, -s.height}.SubScalar(round), v3.Vec{bb.Max.X, bb.Max.Y, s.height}.AddScalar(round)}
+	return &s, nil
 }
 
 // Evaluate returns the minimum distance to a rounded extrusion.
-func (s *ExtrudeRoundedSDF3) Evaluate(p V3) float64 {
+func (s *ExtrudeRoundedSDF3) Evaluate(p v3.Vec) float64 {
 	// sdf for the projected 2d surface
-	a := s.sdf.Evaluate(V2{p.X, p.Y})
-	b := Abs(p.Z) - s.height
+	a := s.sdf.Evaluate(v2.Vec{p.X, p.Y})
+	b := math.Abs(p.Z) - s.height
 	var d float64
 	if b > 0 {
 		// outside the object Z extent
@@ -261,7 +284,7 @@ func (s *ExtrudeRoundedSDF3) Evaluate(p V3) float64 {
 		// within the object Z extent
 		if a < 0 {
 			// inside the boundary
-			d = Max(a, b)
+			d = math.Max(a, b)
 		} else {
 			// outside the boundary
 			d = a
@@ -288,34 +311,46 @@ type LoftSDF3 struct {
 }
 
 // Loft3D extrudes an SDF3 that transitions between two SDF2 shapes.
-func Loft3D(sdf0, sdf1 SDF2, height, round float64) SDF3 {
+func Loft3D(sdf0, sdf1 SDF2, height, round float64) (SDF3, error) {
+	if sdf0 == nil {
+		return nil, errors.New("sdf0 == nil")
+	}
+	if sdf1 == nil {
+		return nil, errors.New("sdf1 == nil")
+	}
+	if height <= 0 {
+		return nil, errors.New("height <= 0")
+	}
+	if round < 0 {
+		return nil, errors.New("round < 0")
+	}
+	if height < 2*round {
+		return nil, errors.New("height < 2 * round")
+	}
 	s := LoftSDF3{
 		sdf0:   sdf0,
 		sdf1:   sdf1,
 		height: (height / 2) - round,
 		round:  round,
 	}
-	if s.height < 0 {
-		panic("height < 2 * round")
-	}
 	// work out the bounding box
 	bb0 := sdf0.BoundingBox()
 	bb1 := sdf1.BoundingBox()
 	bb := bb0.Extend(bb1)
-	s.bb = Box3{V3{bb.Min.X, bb.Min.Y, -s.height}.SubScalar(round), V3{bb.Max.X, bb.Max.Y, s.height}.AddScalar(round)}
-	return &s
+	s.bb = Box3{v3.Vec{bb.Min.X, bb.Min.Y, -s.height}.SubScalar(round), v3.Vec{bb.Max.X, bb.Max.Y, s.height}.AddScalar(round)}
+	return &s, nil
 }
 
 // Evaluate returns the minimum distance to a loft extrusion.
-func (s *LoftSDF3) Evaluate(p V3) float64 {
+func (s *LoftSDF3) Evaluate(p v3.Vec) float64 {
 	// work out the mix value as a function of height
 	k := Clamp((0.5*p.Z/s.height)+0.5, 0, 1)
 	// mix the 2D SDFs
-	a0 := s.sdf0.Evaluate(V2{p.X, p.Y})
-	a1 := s.sdf1.Evaluate(V2{p.X, p.Y})
+	a0 := s.sdf0.Evaluate(v2.Vec{p.X, p.Y})
+	a1 := s.sdf1.Evaluate(v2.Vec{p.X, p.Y})
 	a := Mix(a0, a1, k)
 
-	b := Abs(p.Z) - s.height
+	b := math.Abs(p.Z) - s.height
 	var d float64
 	if b > 0 {
 		// outside the object Z extent
@@ -330,7 +365,7 @@ func (s *LoftSDF3) Evaluate(p V3) float64 {
 		// within the object Z extent
 		if a < 0 {
 			// inside the boundary
-			d = Max(a, b)
+			d = math.Max(a, b)
 		} else {
 			// outside the boundary
 			d = a
@@ -349,23 +384,29 @@ func (s *LoftSDF3) BoundingBox() Box3 {
 
 // BoxSDF3 is a 3d box.
 type BoxSDF3 struct {
-	size  V3
+	size  v3.Vec
 	round float64
 	bb    Box3
 }
 
 // Box3D return an SDF3 for a 3d box (rounded corners with round > 0).
-func Box3D(size V3, round float64) SDF3 {
+func Box3D(size v3.Vec, round float64) (SDF3, error) {
+	if size.LTEZero() {
+		return nil, ErrMsg("size <= 0")
+	}
+	if round < 0 {
+		return nil, ErrMsg("round < 0")
+	}
 	size = size.MulScalar(0.5)
 	s := BoxSDF3{}
 	s.size = size.SubScalar(round)
 	s.round = round
-	s.bb = Box3{size.Negate(), size}
-	return &s
+	s.bb = Box3{size.Neg(), size}
+	return &s, nil
 }
 
 // Evaluate returns the minimum distance to a 3d box.
-func (s *BoxSDF3) Evaluate(p V3) float64 {
+func (s *BoxSDF3) Evaluate(p v3.Vec) float64 {
 	return sdfBox3d(p, s.size) - s.round
 }
 
@@ -384,16 +425,19 @@ type SphereSDF3 struct {
 }
 
 // Sphere3D return an SDF3 for a sphere.
-func Sphere3D(radius float64) SDF3 {
+func Sphere3D(radius float64) (SDF3, error) {
+	if radius <= 0 {
+		return nil, ErrMsg("radius <= 0")
+	}
 	s := SphereSDF3{}
 	s.radius = radius
-	d := V3{radius, radius, radius}
-	s.bb = Box3{d.Negate(), d}
-	return &s
+	d := v3.Vec{radius, radius, radius}
+	s.bb = Box3{d.Neg(), d}
+	return &s, nil
 }
 
 // Evaluate returns the minimum distance to a sphere.
-func (s *SphereSDF3) Evaluate(p V3) float64 {
+func (s *SphereSDF3) Evaluate(p v3.Vec) float64 {
 	return p.Length() - s.radius
 }
 
@@ -414,69 +458,41 @@ type CylinderSDF3 struct {
 }
 
 // Cylinder3D return an SDF3 for a cylinder (rounded edges with round > 0).
-func Cylinder3D(height, radius, round float64) SDF3 {
+func Cylinder3D(height, radius, round float64) (SDF3, error) {
+	if radius <= 0 {
+		return nil, ErrMsg("radius <= 0")
+	}
+	if round < 0 {
+		return nil, ErrMsg("round < 0")
+	}
+	if round > radius {
+		return nil, ErrMsg("round > radius")
+	}
+	if height < 2.0*round {
+		return nil, ErrMsg("height < 2 * round")
+	}
 	s := CylinderSDF3{}
 	s.height = (height / 2) - round
 	s.radius = radius - round
 	s.round = round
-	d := V3{radius, radius, height / 2}
-	s.bb = Box3{d.Negate(), d}
-	return &s
+	d := v3.Vec{radius, radius, height / 2}
+	s.bb = Box3{d.Neg(), d}
+	return &s, nil
 }
 
 // Capsule3D return an SDF3 for a capsule.
-func Capsule3D(radius, height float64) SDF3 {
-	return Cylinder3D(radius, height, radius)
+func Capsule3D(height, radius float64) (SDF3, error) {
+	return Cylinder3D(height, radius, radius)
 }
 
 // Evaluate returns the minimum distance to a cylinder.
-func (s *CylinderSDF3) Evaluate(p V3) float64 {
-	d := sdfBox2d(V2{V2{p.X, p.Y}.Length(), p.Z}, V2{s.radius, s.height})
+func (s *CylinderSDF3) Evaluate(p v3.Vec) float64 {
+	d := sdfBox2d(v2.Vec{v2.Vec{p.X, p.Y}.Length(), p.Z}, v2.Vec{s.radius, s.height})
 	return d - s.round
 }
 
 // BoundingBox returns the bounding box for a cylinder.
 func (s *CylinderSDF3) BoundingBox() Box3 {
-	return s.bb
-}
-
-//-----------------------------------------------------------------------------
-// Cylinders of the same radius and height at various x/y positions
-// (E.g. drilling patterns) are useful enough to warrant their own SDF3 function.
-
-// MultiCylinderSDF3 is an SDF3 containing multiple cylinders.
-type MultiCylinderSDF3 struct {
-	height    float64
-	radius    float64
-	positions V2Set
-	bb        Box3
-}
-
-// MultiCylinder3D return an SDF3 for multiple cylinders.
-func MultiCylinder3D(height, radius float64, positions V2Set) SDF3 {
-	s := MultiCylinderSDF3{}
-	s.height = height / 2
-	s.radius = radius
-	s.positions = positions
-	// work out the bounding box
-	pmin := positions.Min().Sub(V2{radius, radius})
-	pmax := positions.Max().Add(V2{radius, radius})
-	s.bb = Box3{V3{pmin.X, pmin.Y, -height / 2}, V3{pmax.X, pmax.Y, height / 2}}
-	return &s
-}
-
-// Evaluate return the minimum distance to multiple cylinders.
-func (s *MultiCylinderSDF3) Evaluate(p V3) float64 {
-	d := math.MaxFloat64
-	for _, posn := range s.positions {
-		l := V2{p.X, p.Y}.Sub(posn).Length()
-		d = Min(d, sdfBox2d(V2{l, p.Z}, V2{s.radius, s.height}))
-	}
-	return d
-}
-
-// BoundingBox return the bounding box for multiple cylinders.
-func (s *MultiCylinderSDF3) BoundingBox() Box3 {
 	return s.bb
 }
 
@@ -489,36 +505,45 @@ type ConeSDF3 struct {
 	r1     float64 // top radius
 	height float64 // half height
 	round  float64 // rounding offset
-	u      V2      // normalized cone slope vector
-	n      V2      // normal to cone slope (points outward)
+	u      v2.Vec  // normalized cone slope vector
+	n      v2.Vec  // normal to cone slope (points outward)
 	l      float64 // length of cone slope
 	bb     Box3    // bounding box
 }
 
 // Cone3D returns the SDF3 for a trucated cone (round > 0 gives rounded edges).
-func Cone3D(height, r0, r1, round float64) SDF3 {
+func Cone3D(height, r0, r1, round float64) (SDF3, error) {
+	if height <= 0 {
+		return nil, ErrMsg("height <= 0")
+	}
+	if round < 0 {
+		return nil, ErrMsg("round < 0")
+	}
+	if height < 2.0*round {
+		return nil, ErrMsg("height < 2 * round")
+	}
 	s := ConeSDF3{}
 	s.height = (height / 2) - round
 	s.round = round
 	// cone slope vector and normal
-	s.u = V2{r1, height / 2}.Sub(V2{r0, -height / 2}).Normalize()
-	s.n = V2{s.u.Y, -s.u.X}
+	s.u = v2.Vec{r1, height / 2}.Sub(v2.Vec{r0, -height / 2}).Normalize()
+	s.n = v2.Vec{s.u.Y, -s.u.X}
 	// inset the radii for the rounding
 	ofs := round / s.n.X
 	s.r0 = r0 - (1+s.n.Y)*ofs
 	s.r1 = r1 - (1-s.n.Y)*ofs
 	// cone slope length
-	s.l = V2{s.r1, s.height}.Sub(V2{s.r0, -s.height}).Length()
+	s.l = v2.Vec{s.r1, s.height}.Sub(v2.Vec{s.r0, -s.height}).Length()
 	// work out the bounding box
-	r := Max(s.r0+round, s.r1+round)
-	s.bb = Box3{V3{-r, -r, -height / 2}, V3{r, r, height / 2}}
-	return &s
+	r := math.Max(s.r0+round, s.r1+round)
+	s.bb = Box3{v3.Vec{-r, -r, -height / 2}, v3.Vec{r, r, height / 2}}
+	return &s, nil
 }
 
 // Evaluate returns the minimum distance to a trucated cone.
-func (s *ConeSDF3) Evaluate(p V3) float64 {
+func (s *ConeSDF3) Evaluate(p v3.Vec) float64 {
 	// convert to SoR 2d coordinates
-	p2 := V2{V2{p.X, p.Y}.Length(), p.Z}
+	p2 := v2.Vec{v2.Vec{p.X, p.Y}.Length(), p.Z}
 	// is p2 above the cone?
 	if p2.Y >= s.height && p2.X <= s.r1 {
 		return p2.Y - s.height - s.round
@@ -528,11 +553,11 @@ func (s *ConeSDF3) Evaluate(p V3) float64 {
 		return -p2.Y - s.height - s.round
 	}
 	// distance to slope line
-	v := p2.Sub(V2{s.r0, -s.height})
+	v := p2.Sub(v2.Vec{s.r0, -s.height})
 	dSlope := v.Dot(s.n)
 	// is p2 inside the cone?
-	if dSlope < 0 && Abs(p2.Y) < s.height {
-		return -Min(-dSlope, s.height-Abs(p2.Y)) - s.round
+	if dSlope < 0 && math.Abs(p2.Y) < s.height {
+		return -math.Min(-dSlope, s.height-math.Abs(p2.Y)) - s.round
 	}
 	// is p2 closest to the slope line?
 	t := v.Dot(s.u)
@@ -544,7 +569,7 @@ func (s *ConeSDF3) Evaluate(p V3) float64 {
 		return v.Length() - s.round
 	}
 	// p2 is closest to the top radius vertex
-	return p2.Sub(V2{s.r1, s.height}).Length() - s.round
+	return p2.Sub(v2.Vec{s.r1, s.height}).Length() - s.round
 }
 
 // BoundingBox return the bounding box for the trucated cone..
@@ -575,7 +600,7 @@ func Transform3D(sdf SDF3, matrix M44) SDF3 {
 
 // Evaluate returns the minimum distance to a transformed SDF3.
 // Distance is *not* preserved with scaling.
-func (s *TransformSDF3) Evaluate(p V3) float64 {
+func (s *TransformSDF3) Evaluate(p v3.Vec) float64 {
 	return s.sdf.Evaluate(s.inverse.MulPosition(p))
 }
 
@@ -596,7 +621,7 @@ type ScaleUniformSDF3 struct {
 
 // ScaleUniform3D uniformly scales an SDF3 on all axes.
 func ScaleUniform3D(sdf SDF3, k float64) SDF3 {
-	m := Scale3d(V3{k, k, k})
+	m := Scale3d(v3.Vec{k, k, k})
 	return &ScaleUniformSDF3{
 		sdf:  sdf,
 		k:    k,
@@ -607,7 +632,7 @@ func ScaleUniform3D(sdf SDF3, k float64) SDF3 {
 
 // Evaluate returns the minimum distance to a uniformly scaled SDF3.
 // The distance is correct with scaling.
-func (s *ScaleUniformSDF3) Evaluate(p V3) float64 {
+func (s *ScaleUniformSDF3) Evaluate(p v3.Vec) float64 {
 	q := p.MulScalar(s.invK)
 	return s.sdf.Evaluate(q) * s.k
 }
@@ -652,12 +677,12 @@ func Union3D(sdf ...SDF3) SDF3 {
 		bb = bb.Extend(x.BoundingBox())
 	}
 	s.bb = bb
-	s.min = Min
+	s.min = math.Min
 	return &s
 }
 
 // Evaluate returns the minimum distance to an SDF3 union.
-func (s *UnionSDF3) Evaluate(p V3) float64 {
+func (s *UnionSDF3) Evaluate(p v3.Vec) float64 {
 	var d float64
 	for i, x := range s.sdf {
 		if i == 0 {
@@ -700,13 +725,13 @@ func Difference3D(s0, s1 SDF3) SDF3 {
 	s := DifferenceSDF3{}
 	s.s0 = s0
 	s.s1 = s1
-	s.max = Max
+	s.max = math.Max
 	s.bb = s0.BoundingBox()
 	return &s
 }
 
 // Evaluate returns the minimum distance to the SDF3 difference.
-func (s *DifferenceSDF3) Evaluate(p V3) float64 {
+func (s *DifferenceSDF3) Evaluate(p v3.Vec) float64 {
 	return s.max(s.s0.Evaluate(p), -s.s1.Evaluate(p))
 }
 
@@ -717,6 +742,42 @@ func (s *DifferenceSDF3) SetMax(max MaxFunc) {
 
 // BoundingBox returns the bounding box of the SDF3 difference.
 func (s *DifferenceSDF3) BoundingBox() Box3 {
+	return s.bb
+}
+
+//-----------------------------------------------------------------------------
+
+// ElongateSDF3 is the elongation of an SDF3.
+type ElongateSDF3 struct {
+	sdf    SDF3   // the sdf being elongated
+	hp, hn v3.Vec // positive/negative elongation vector
+	bb     Box3   // bounding box
+}
+
+// Elongate3D returns the elongation of an SDF3.
+func Elongate3D(sdf SDF3, h v3.Vec) SDF3 {
+	h = h.Abs()
+	s := ElongateSDF3{
+		sdf: sdf,
+		hp:  h.MulScalar(0.5),
+		hn:  h.MulScalar(-0.5),
+	}
+	// bounding box
+	bb := sdf.BoundingBox()
+	bb0 := bb.Translate(s.hp)
+	bb1 := bb.Translate(s.hn)
+	s.bb = bb0.Extend(bb1)
+	return &s
+}
+
+// Evaluate returns the minimum distance to a elongated SDF2.
+func (s *ElongateSDF3) Evaluate(p v3.Vec) float64 {
+	q := p.Sub(p.Clamp(s.hn, s.hp))
+	return s.sdf.Evaluate(q)
+}
+
+// BoundingBox returns the bounding box of an elongated SDF3.
+func (s *ElongateSDF3) BoundingBox() Box3 {
 	return s.bb
 }
 
@@ -738,14 +799,14 @@ func Intersect3D(s0, s1 SDF3) SDF3 {
 	s := IntersectionSDF3{}
 	s.s0 = s0
 	s.s1 = s1
-	s.max = Max
+	s.max = math.Max
 	// TODO fix bounding box
 	s.bb = s0.BoundingBox()
 	return &s
 }
 
 // Evaluate returns the minimum distance to the SDF3 intersection.
-func (s *IntersectionSDF3) Evaluate(p V3) float64 {
+func (s *IntersectionSDF3) Evaluate(p v3.Vec) float64 {
 	return s.max(s.s0.Evaluate(p), s.s1.Evaluate(p))
 }
 
@@ -764,26 +825,26 @@ func (s *IntersectionSDF3) BoundingBox() Box3 {
 // CutSDF3 makes a planar cut through an SDF3.
 type CutSDF3 struct {
 	sdf SDF3
-	a   V3   // point on plane
-	n   V3   // normal to plane
-	bb  Box3 // bounding box
+	a   v3.Vec // point on plane
+	n   v3.Vec // normal to plane
+	bb  Box3   // bounding box
 }
 
 // Cut3D cuts an SDF3 along a plane passing through a with normal n.
 // The SDF3 on the same side as the normal remains.
-func Cut3D(sdf SDF3, a, n V3) SDF3 {
+func Cut3D(sdf SDF3, a, n v3.Vec) SDF3 {
 	s := CutSDF3{}
 	s.sdf = sdf
 	s.a = a
-	s.n = n.Normalize().Negate()
+	s.n = n.Normalize().Neg()
 	// TODO - cut the bounding box
 	s.bb = sdf.BoundingBox()
 	return &s
 }
 
 // Evaluate returns the minimum distance to the cut SDF3.
-func (s *CutSDF3) Evaluate(p V3) float64 {
-	return Max(p.Sub(s.a).Dot(s.n), s.sdf.Evaluate(p))
+func (s *CutSDF3) Evaluate(p v3.Vec) float64 {
+	return math.Max(p.Sub(s.a).Dot(s.n), s.sdf.Evaluate(p))
 }
 
 // BoundingBox returns the bounding box of the cut SDF3.
@@ -796,26 +857,26 @@ func (s *CutSDF3) BoundingBox() Box3 {
 // ArraySDF3 stores an XYZ array of a given SDF3
 type ArraySDF3 struct {
 	sdf  SDF3
-	num  V3i
-	step V3
+	num  v3i.Vec
+	step v3.Vec
 	min  MinFunc
 	bb   Box3
 }
 
 // Array3D returns an XYZ array of a given SDF3
-func Array3D(sdf SDF3, num V3i, step V3) SDF3 {
+func Array3D(sdf SDF3, num v3i.Vec, step v3.Vec) SDF3 {
 	// check the number of steps
-	if num[0] <= 0 || num[1] <= 0 || num[2] <= 0 {
+	if num.X <= 0 || num.Y <= 0 || num.Z <= 0 {
 		return nil
 	}
 	s := ArraySDF3{}
 	s.sdf = sdf
 	s.num = num
 	s.step = step
-	s.min = Min
+	s.min = math.Min
 	// work out the bounding box
 	bb0 := sdf.BoundingBox()
-	bb1 := bb0.Translate(step.Mul(num.SubScalar(1).ToV3()))
+	bb1 := bb0.Translate(step.Mul(conv.V3iToV3(num.SubScalar(1))))
 	s.bb = bb0.Extend(bb1)
 	return &s
 }
@@ -826,12 +887,12 @@ func (s *ArraySDF3) SetMin(min MinFunc) {
 }
 
 // Evaluate returns the minimum distance to an XYZ SDF3 array.
-func (s *ArraySDF3) Evaluate(p V3) float64 {
+func (s *ArraySDF3) Evaluate(p v3.Vec) float64 {
 	d := math.MaxFloat64
-	for j := 0; j < s.num[0]; j++ {
-		for k := 0; k < s.num[1]; k++ {
-			for l := 0; l < s.num[2]; l++ {
-				x := p.Sub(V3{float64(j) * s.step.X, float64(k) * s.step.Y, float64(l) * s.step.Z})
+	for j := 0; j < s.num.X; j++ {
+		for k := 0; k < s.num.Y; k++ {
+			for l := 0; l < s.num.Z; l++ {
+				x := p.Sub(v3.Vec{float64(j) * s.step.X, float64(k) * s.step.Y, float64(l) * s.step.Z})
 				d = s.min(d, s.sdf.Evaluate(x))
 			}
 		}
@@ -865,7 +926,7 @@ func RotateUnion3D(sdf SDF3, num int, step M44) SDF3 {
 	s.sdf = sdf
 	s.num = num
 	s.step = step.Inverse()
-	s.min = Min
+	s.min = math.Min
 	// work out the bounding box
 	v := sdf.BoundingBox().Vertices()
 	bbMin := v[0]
@@ -873,14 +934,14 @@ func RotateUnion3D(sdf SDF3, num int, step M44) SDF3 {
 	for i := 0; i < s.num; i++ {
 		bbMin = bbMin.Min(v.Min())
 		bbMax = bbMax.Max(v.Max())
-		v.MulVertices(step)
+		mulVertices3(v, step)
 	}
 	s.bb = Box3{bbMin, bbMax}
 	return &s
 }
 
 // Evaluate returns the minimum distance to a rotate/union object.
-func (s *RotateUnionSDF3) Evaluate(p V3) float64 {
+func (s *RotateUnionSDF3) Evaluate(p v3.Vec) float64 {
 	d := math.MaxFloat64
 	rot := Identity3d()
 	for i := 0; i < s.num; i++ {
@@ -930,21 +991,21 @@ func RotateCopy3D(
 	// find the bounding box vertex with the greatest distance from the z-axis
 	// TODO - revisit - should go by real vertices
 	for _, v := range bb.Vertices() {
-		l := V2{v.X, v.Y}.Length()
+		l := v2.Vec{v.X, v.Y}.Length()
 		if l > rmax {
 			rmax = l
 		}
 	}
-	s.bb = Box3{V3{-rmax, -rmax, zmin}, V3{rmax, rmax, zmax}}
+	s.bb = Box3{v3.Vec{-rmax, -rmax, zmin}, v3.Vec{rmax, rmax, zmax}}
 	return &s
 }
 
 // Evaluate returns the minimum distance to a rotate/copy SDF3.
-func (s *RotateCopySDF3) Evaluate(p V3) float64 {
+func (s *RotateCopySDF3) Evaluate(p v3.Vec) float64 {
 	// Map p to a point in the first copy sector.
-	p2 := V2{p.X, p.Y}
-	p2 = PolarToXY(p2.Length(), SawTooth(math.Atan2(p2.Y, p2.X), s.theta))
-	return s.sdf.Evaluate(V3{p2.X, p2.Y, p.Z})
+	p2d := v2.Vec{p.X, p.Y}
+	p2d = conv.P2ToV2(p2.Vec{p2d.Length(), SawTooth(math.Atan2(p2d.Y, p2d.X), s.theta)})
+	return s.sdf.Evaluate(v3.Vec{p2d.X, p2d.Y, p.Z})
 }
 
 // BoundingBox returns the bounding box of a rotate/copy SDF3.
@@ -954,23 +1015,115 @@ func (s *RotateCopySDF3) BoundingBox() Box3 {
 
 //-----------------------------------------------------------------------------
 
-// ChamferedCylinder intersects a chamfered cylinder with an SDF3.
-func ChamferedCylinder(s SDF3, kb, kt float64) SDF3 {
-	// get the length and radius from the bounding box
-	l := s.BoundingBox().Max.Z
-	r := s.BoundingBox().Max.X
-	p := NewPolygon()
-	p.Add(0, -l)
-	p.Add(r, -l).Chamfer(r * kb)
-	p.Add(r, l).Chamfer(r * kt)
-	p.Add(0, l)
-	return Intersect3D(s, Revolve3D(Polygon2D(p.Vertices())))
+/* WIP
+
+// Connector3 defines a 3d connection point.
+type Connector3 struct {
+	Name     string
+	Position v3.Vec
+	Vector   v3.Vec
+	Angle    float64
+}
+
+// ConnectedSDF3 is an SDF3 with connection points defined.
+type ConnectedSDF3 struct {
+	sdf        SDF3
+	connectors []Connector3
+}
+
+// AddConnector adds connection points to an SDF3.
+func AddConnector(sdf SDF3, connectors ...Connector3) SDF3 {
+	// is the sdf already connected?
+	if s, ok := sdf.(*ConnectedSDF3); ok {
+		// append connection points
+		s.connectors = append(s.connectors, connectors...)
+		return s
+	}
+	// return a new connected sdf
+	return &ConnectedSDF3{
+		sdf:        sdf,
+		connectors: connectors,
+	}
+}
+
+// Evaluate returns the minimum distance to a connected SDF3.
+func (s *ConnectedSDF3) Evaluate(p v3.Vec) float64 {
+	return s.sdf.Evaluate(p)
+}
+
+// BoundingBox returns the bounding box of a connected SDF3.
+func (s *ConnectedSDF3) BoundingBox() Box3 {
+	return s.sdf.BoundingBox()
+}
+
+*/
+
+//-----------------------------------------------------------------------------
+
+// OffsetSDF3 offsets the distance function of an existing SDF3.
+type OffsetSDF3 struct {
+	sdf    SDF3    // the underlying SDF
+	offset float64 // the distance the SDF is offset by
+	bb     Box3    // bounding box
+}
+
+// Offset3D returns an SDF3 that offsets the distance function of another SDF3.
+func Offset3D(sdf SDF3, offset float64) SDF3 {
+	s := OffsetSDF3{
+		sdf:    sdf,
+		offset: offset,
+	}
+	// bounding box
+	bb := sdf.BoundingBox()
+	s.bb = NewBox3(bb.Center(), bb.Size().AddScalar(2*offset))
+	return &s
+}
+
+// Evaluate returns the minimum distance to an offset SDF3.
+func (s *OffsetSDF3) Evaluate(p v3.Vec) float64 {
+	return s.sdf.Evaluate(p) - s.offset
+}
+
+// BoundingBox returns the bounding box of an offset SDF3.
+func (s *OffsetSDF3) BoundingBox() Box3 {
+	return s.bb
+}
+
+//-----------------------------------------------------------------------------
+
+// ShellSDF3 shells the surface of an existing SDF3.
+type ShellSDF3 struct {
+	sdf   SDF3    // parent sdf3
+	delta float64 // half shell thickness
+	bb    Box3    // bounding box
+}
+
+// Shell3D returns an SDF3 that shells the surface of an existing SDF3.
+func Shell3D(sdf SDF3, thickness float64) (SDF3, error) {
+	if thickness <= 0 {
+		return nil, ErrMsg("thickness <= 0")
+	}
+	return &ShellSDF3{
+		sdf:   sdf,
+		delta: 0.5 * thickness,
+		bb:    sdf.BoundingBox().Enlarge(v3.Vec{thickness, thickness, thickness}),
+	}, nil
+}
+
+// Evaluate returns the minimum distance to a shelled SDF3.
+func (s *ShellSDF3) Evaluate(p v3.Vec) float64 {
+	return math.Abs(s.sdf.Evaluate(p)) - s.delta
+}
+
+// BoundingBox returns the bounding box of a shelled SDF3.
+func (s *ShellSDF3) BoundingBox() Box3 {
+	return s.bb
 }
 
 //-----------------------------------------------------------------------------
 
 // LineOf3D returns a union of 3D objects positioned along a line from p0 to p1.
-func LineOf3D(s SDF3, p0, p1 V3, pattern string) SDF3 {
+func LineOf3D(s SDF3, p0, p1 v3.Vec, pattern string) SDF3 {
 	var objects []SDF3
 	if pattern != "" {
 		x := p0
@@ -981,6 +1134,34 @@ func LineOf3D(s SDF3, p0, p1 V3, pattern string) SDF3 {
 			}
 			x = x.Add(dx)
 		}
+	}
+	return Union3D(objects...)
+}
+
+//-----------------------------------------------------------------------------
+
+// Multi3D creates a union of an SDF3 at translated positions.
+func Multi3D(s SDF3, positions v3.VecSet) SDF3 {
+	if (s == nil) || (len(positions) == 0) {
+		return nil
+	}
+	objects := make([]SDF3, len(positions))
+	for i, p := range positions {
+		objects[i] = Transform3D(s, Translate3d(p))
+	}
+	return Union3D(objects...)
+}
+
+//-----------------------------------------------------------------------------
+
+// Orient3D creates a union of an SDF3 at oriented directions.
+func Orient3D(s SDF3, base v3.Vec, directions v3.VecSet) SDF3 {
+	if (s == nil) || (len(directions) == 0) {
+		return nil
+	}
+	objects := make([]SDF3, len(directions))
+	for i, d := range directions {
+		objects[i] = Transform3D(s, RotateToVector(base, d))
 	}
 	return Union3D(objects...)
 }

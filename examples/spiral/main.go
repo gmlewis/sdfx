@@ -9,14 +9,20 @@ Spirals
 package main
 
 import (
-	. "github.com/gmlewis/sdfx/sdf"
+	"log"
+
+	"github.com/gmlewis/sdfx/render"
+	"github.com/gmlewis/sdfx/sdf"
 )
 
 //-----------------------------------------------------------------------------
 
 func main() {
-	s2 := ArcSpiral2D(1.0, 20.0, 0.25*Pi, 8*Tau, 1.0)
-	RenderDXF(s2, 400, "spiral.dxf")
+	s, err := sdf.ArcSpiral2D(1.0, 20.0, 0.25*sdf.Pi, 8*sdf.Tau, 1.0)
+	if err != nil {
+		log.Fatalf("error: %s\n", err)
+	}
+	render.ToDXF(s, "spiral.dxf", render.NewMarchingSquaresQuadtree(400))
 }
 
 //-----------------------------------------------------------------------------

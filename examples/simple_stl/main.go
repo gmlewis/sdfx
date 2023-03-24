@@ -11,7 +11,8 @@ package main
 import (
 	"fmt"
 
-	. "github.com/deadsy/sdfx/sdf"
+	"github.com/gmlewis/sdfx/render"
+	v3 "github.com/gmlewis/sdfx/vec/v3"
 )
 
 //-----------------------------------------------------------------------------
@@ -20,17 +21,17 @@ func main() {
 
 	side := 30.0
 
-	a := V3{0, 0, 0}
-	b := V3{side, 0, 0}
-	c := V3{0, side, 0}
-	d := V3{0, 0, side}
+	a := v3.Vec{0, 0, 0}
+	b := v3.Vec{side, 0, 0}
+	c := v3.Vec{0, side, 0}
+	d := v3.Vec{0, 0, side}
 
-	t1 := NewTriangle3(a, b, d)
-	t2 := NewTriangle3(a, c, b)
-	t3 := NewTriangle3(a, d, c)
-	t4 := NewTriangle3(b, c, d)
+	t1 := render.NewTriangle3(a, b, d)
+	t2 := render.NewTriangle3(a, c, b)
+	t3 := render.NewTriangle3(a, d, c)
+	t4 := render.NewTriangle3(b, c, d)
 
-	err := SaveSTL("simple.stl", []*Triangle3{t1, t2, t3, t4})
+	err := render.SaveSTL("simple.stl", []*render.Triangle3{t1, t2, t3, t4})
 	if err != nil {
 		fmt.Printf("%s", err)
 	}

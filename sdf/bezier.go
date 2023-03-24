@@ -9,9 +9,33 @@ Create curves using Bezier splines.
 package sdf
 
 import (
+	"errors"
 	"fmt"
-	"math/rand"
+	"log"
+	"math"
+
+	"github.com/gmlewis/sdfx/vec/conv"
+	"github.com/gmlewis/sdfx/vec/p2"
+	v2 "github.com/gmlewis/sdfx/vec/v2"
 )
+
+//-----------------------------------------------------------------------------
+
+// colinearSlow return true if 3 points are colinear (slow test).
+func colinearSlow(a, b, c v2.Vec, tolerance float64) bool {
+	// use the cross product as a measure of colinearity
+	pa := a.Sub(c).Normalize()
+	pb := b.Sub(c).Normalize()
+	return math.Abs(pa.Cross(pb)) < tolerance
+}
+
+// colinearFast return true if 3 points are colinear (fast test).
+func colinearFast(a, b, c v2.Vec, tolerance float64) bool {
+	// use the cross product as a measure of colinearity
+	ac := a.Sub(b)
+	bc := b.Sub(c)
+	return math.Abs(ac.Cross(bc)) < tolerance
+}
 
 //-----------------------------------------------------------------------------
 
@@ -40,7 +64,8 @@ func (p *BezierPolynomial) f0(t float64) float64 {
 		// quartic
 		return p.a + t*(p.b+t*(p.c+t*(p.d+t*p.e)))
 	default:
-		panic(fmt.Sprintf("bad polynomial order %d", p.n))
+		log.Panicf("bad polynomial order %d", p.n)
+		return 0
 	}
 }
 
@@ -63,7 +88,8 @@ func (p *BezierPolynomial) f1(t float64) float64 {
 		// quartic
 		return p.b + t*(2*p.c+t*(3*p.d+t*4*p.e))
 	default:
-		panic(fmt.Sprintf("bad polynomial order %d", p.n))
+		log.Panicf("bad polynomial order %d", p.n)
+		return 0
 	}
 }
 
@@ -86,7 +112,8 @@ func (p *BezierPolynomial) f2(t float64) float64 {
 		// quartic
 		return 2 * (p.c + t*3*(p.d+t*2*p.e))
 	default:
-		panic(fmt.Sprintf("bad polynomial order %d", p.n))
+		log.Panicf("bad polynomial order %d", p.n)
+		return 0
 	}
 }
 
@@ -120,10 +147,11 @@ func (p *BezierPolynomial) Set(x []float64) {
 		p.d = -4*x[0] + 12*x[1] - 12*x[2] + 4*x[3]
 		p.e = x[0] - 4*x[1] + 6*x[2] - 4*x[3] + x[4]
 	default:
-		panic(fmt.Sprintf("bad polynomial order %d", p.n))
+		log.Panicf("bad polynomial order %d", p.n)
+		return
 	}
 	// zero out any very small coefficients
-	sum := Abs(p.a) + Abs(p.b) + Abs(p.c) + Abs(p.d) + Abs(p.e)
+	sum := math.Abs(p.a) + math.Abs(p.b) + math.Abs(p.c) + math.Abs(p.d) + math.Abs(p.e)
 	p.a = ZeroSmall(p.a, sum, epsilon)
 	p.b = ZeroSmall(p.b, sum, epsilon)
 	p.c = ZeroSmall(p.c, sum, epsilon)
@@ -153,12 +181,12 @@ type BezierSpline struct {
 }
 
 // Return the function value for a given t value.
-func (s *BezierSpline) f0(t float64) V2 {
-	return V2{s.px.f0(t), s.py.f0(t)}
+func (s *BezierSpline) f0(t float64) v2.Vec {
+	return v2.Vec{s.px.f0(t), s.py.f0(t)}
 }
 
 // Sample generates polygon samples for a bezier spline.
-func (s *BezierSpline) Sample(p *Polygon, t0, t1 float64, p0, p1 V2, n int) {
+func (s *BezierSpline) Sample(p *Polygon, t0, t1 float64, p0, p1 v2.Vec, n int) {
 
 	// test the midpoint
 	tmid := (t0 + t1) / 2
@@ -166,7 +194,7 @@ func (s *BezierSpline) Sample(p *Polygon, t0, t1 float64, p0, p1 V2, n int) {
 	if colinearSlow(pmid, p0, p1, s.tolerance) {
 		// the curve could be periodic so perturb the midpoint
 		// pick a t value in [0.45,0.55]
-		k := 0.45 + 0.1*rand.Float64()
+		k := 0.45 + 0.1*sdfRand.Float64()
 		t2 := t0 + k*(t1-t0)
 		p2 := s.f0(t2)
 		if colinearSlow(p2, p0, p1, s.tolerance) {
@@ -195,7 +223,7 @@ func (s *BezierSpline) Sample(p *Polygon, t0, t1 float64, p0, p1 V2, n int) {
 }
 
 // NewBezierSpline returns a bezier spline from the provided control/end points.
-func NewBezierSpline(p []V2) *BezierSpline {
+func NewBezierSpline(p []v2.Vec) *BezierSpline {
 	//fmt.Printf("%v\n", p)
 	s := BezierSpline{}
 	// closer to 0, more polygon line segments
@@ -225,9 +253,9 @@ const (
 // BezierVertex specifies the vertex for a bezier curve.
 type BezierVertex struct {
 	vtype     bezierVertexType // type of bezier vertex
-	vertex    V2               // vertex coordinates
-	handleFwd V2               // polar coordinates of forward handle
-	handleRev V2               // polar coordinates of reverse handle
+	vertex    v2.Vec           // vertex coordinates
+	handleFwd v2.Vec           // polar coordinates of forward handle
+	handleRev v2.Vec           // polar coordinates of reverse handle
 }
 
 // Bezier curve specification..
@@ -245,13 +273,13 @@ func (b *Bezier) handles() {
 	for _, v := range b.vlist {
 		fwd := v.handleFwd
 		rev := v.handleRev
-		v.handleFwd = V2{}
-		v.handleRev = V2{}
+		v.handleFwd = v2.Vec{}
+		v.handleRev = v2.Vec{}
 		// add a control midpoint for the reverse handle
 		if rev.X != 0 {
 			cp := BezierVertex{}
 			cp.vtype = midpoint
-			cp.vertex = PolarToXY(rev.X, rev.Y).Add(v.vertex)
+			cp.vertex = conv.P2ToV2(p2.Vec{rev.X, rev.Y}).Add(v.vertex)
 			vlist = append(vlist, cp)
 		}
 		// add the original curve end point.
@@ -260,7 +288,7 @@ func (b *Bezier) handles() {
 		if fwd.X != 0 {
 			cp := BezierVertex{}
 			cp.vtype = midpoint
-			cp.vertex = PolarToXY(fwd.X, fwd.Y).Add(v.vertex)
+			cp.vertex = conv.P2ToV2(p2.Vec{fwd.X, fwd.Y}).Add(v.vertex)
 			vlist = append(vlist, cp)
 		}
 	}
@@ -280,18 +308,18 @@ func (b *Bezier) handles() {
 }
 
 // Take care of curve closure.
-func (b *Bezier) closure() {
+func (b *Bezier) closure() error {
 	// do we need to close the curve?
 	if !b.closed {
-		return
+		return nil
 	}
 	if len(b.vlist) == 0 || len(b.vlist) == 1 {
-		panic("bad number of vertices")
+		return errors.New("bad number of vertices")
 	}
 	first := b.vlist[0]
 	last := b.vlist[len(b.vlist)-1]
 	if first.vtype != endpoint {
-		panic("first control vertex should be an endpoint")
+		return errors.New("first control vertex should be an endpoint")
 	}
 	if last.vtype == endpoint {
 		if !last.vertex.Equals(first.vertex, tolerance) {
@@ -303,30 +331,39 @@ func (b *Bezier) closure() {
 		// add the first vertex to close the curve
 		b.vlist = append(b.vlist, first)
 	} else {
-		panic("bad vertex type")
+		return errors.New("bad vertex type")
 	}
+	return nil
 }
 
 // Do some validation checks on the control vertices.
-func (b *Bezier) validate() {
+func (b *Bezier) validate() error {
 	// basic checks
 	n := len(b.vlist)
 	if n < 2 {
-		panic("bezier curve must have at least two points")
+		return errors.New("bezier curve must have at least two points")
 	}
 	if b.vlist[0].vtype != endpoint {
-		panic("bezier curve must start with an endpoint")
+		return errors.New("bezier curve must start with an endpoint")
 	}
 	if !b.closed && b.vlist[n-1].vtype != endpoint {
-		panic("non-closed bezier curve must end with an endpoint")
+		return errors.New("non-closed bezier curve must end with an endpoint")
 	}
+	return nil
 }
 
 // Post definition control point fixups.
-func (b *Bezier) fixups() {
+func (b *Bezier) fixups() error {
 	b.handles()
-	b.closure()
-	b.validate()
+	err := b.closure()
+	if err != nil {
+		return err
+	}
+	err = b.validate()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 //-----------------------------------------------------------------------------
@@ -343,7 +380,7 @@ func (b *Bezier) Close() {
 }
 
 // AddV2 adds a V2 vertex to a polygon.
-func (b *Bezier) AddV2(x V2) *BezierVertex {
+func (b *Bezier) AddV2(x v2.Vec) *BezierVertex {
 	v := BezierVertex{}
 	v.vertex = x
 	v.vtype = endpoint
@@ -353,7 +390,7 @@ func (b *Bezier) AddV2(x V2) *BezierVertex {
 
 // Add an x,y vertex to a polygon.
 func (b *Bezier) Add(x, y float64) *BezierVertex {
-	return b.AddV2(V2{x, y})
+	return b.AddV2(v2.Vec{x, y})
 }
 
 // Mid marks the vertex as a mid-curve control point.
@@ -365,18 +402,18 @@ func (v *BezierVertex) Mid() *BezierVertex {
 // HandleFwd sets the slope handle in the forward direction.
 func (v *BezierVertex) HandleFwd(theta, r float64) *BezierVertex {
 	if v.vtype == midpoint {
-		panic("can't place a handle on a curve midpoint")
+		log.Panicf("can't place a handle on a curve midpoint")
 	}
-	v.handleFwd = V2{Abs(r), theta}
+	v.handleFwd = v2.Vec{math.Abs(r), theta}
 	return v
 }
 
 // HandleRev sets the slope handle in the reverse direction.
 func (v *BezierVertex) HandleRev(theta, r float64) *BezierVertex {
 	if v.vtype == midpoint {
-		panic("can't place a handle on a curve midpoint")
+		log.Panicf("can't place a handle on a curve midpoint")
 	}
-	v.handleRev = V2{Abs(r), theta}
+	v.handleRev = v2.Vec{math.Abs(r), theta}
 	return v
 }
 
@@ -388,13 +425,14 @@ func (v *BezierVertex) Handle(theta, fwd, rev float64) *BezierVertex {
 }
 
 // Polygon returns a polygon approximating the bezier curve.
-func (b *Bezier) Polygon() *Polygon {
-	b.fixups()
-
+func (b *Bezier) Polygon() (*Polygon, error) {
+	err := b.fixups()
+	if err != nil {
+		return nil, err
+	}
 	// generate the splines from the vertices
 	var splines []*BezierSpline
-	var vertices []V2
-
+	var vertices []v2.Vec
 	n := len(b.vlist)
 	state := endpoint
 	i := 0
@@ -403,12 +441,12 @@ func (b *Bezier) Polygon() *Polygon {
 		if state == endpoint {
 			if v.vtype == endpoint {
 				// start of spline
-				vertices = []V2{v.vertex}
+				vertices = []v2.Vec{v.vertex}
 				// get the midpoints
 				i++
 				state = midpoint
 			} else {
-				panic("bad vertex type")
+				return nil, errors.New("bad vertex type")
 			}
 		} else if state == midpoint {
 			if v.vtype == endpoint {
@@ -427,13 +465,12 @@ func (b *Bezier) Polygon() *Polygon {
 				vertices = append(vertices, v.vertex)
 				i++
 			} else {
-				panic("bad vertex type")
+				return nil, errors.New("bad vertex type")
 			}
 		} else {
-			panic("bad state")
+			return nil, errors.New("bad state")
 		}
 	}
-
 	// render the splines to a polygon
 	p := NewPolygon()
 	n = len(splines)
@@ -449,7 +486,7 @@ func (b *Bezier) Polygon() *Polygon {
 			p.Drop()
 		}
 	}
-	return p
+	return p, nil
 }
 
 //-----------------------------------------------------------------------------

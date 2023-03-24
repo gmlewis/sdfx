@@ -1,46 +1,13 @@
 
-DIRS = 3dp_nutbolt \
-       axochord \
-       axoloti \
-       benchmark \
-       bezier \
-       bjj \
-       bolt_container \
-       box \
-       camshaft \
-       challenge \
-       cylinder_head \
-       devo \
-       dust_collection \
-       extrusion \
-       fidget \
-       finial \
-       gears \
-       gas_cap \
-       geneva \
-       keycap \
-       nordic \
-       nutcover \
-       nutsandbolts \
-       phone \
-       pool \
-       pottery_wheel \
-       simple_stl \
-       spiral \
-       square_flange \
-       test \
-       text \
-       voronoi \
+DIRS = $(wildcard ./examples/*/.)
 
-all:
+all clean hash:
 	for dir in $(DIRS); do \
-		$(MAKE) -C ./examples/$$dir $@; \
+		$(MAKE) -C $$dir $@ || exit 1; \
 	done
 
-format:
-	goimports -w .
-
-clean:
+test:
+	cd sdf; go test; cd ..
 	for dir in $(DIRS); do \
-		$(MAKE) -C ./examples/$$dir $@; \
+		$(MAKE) -C $$dir $@ || exit 1; \
 	done

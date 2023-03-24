@@ -8,55 +8,81 @@ Nuts and Bolts
 
 package main
 
-import . "github.com/deadsy/sdfx/sdf"
+import (
+	"log"
+
+	"github.com/gmlewis/sdfx/obj"
+	"github.com/gmlewis/sdfx/render"
+	"github.com/gmlewis/sdfx/sdf"
+	v3 "github.com/gmlewis/sdfx/vec/v3"
+)
 
 //-----------------------------------------------------------------------------
 
-var hex_radius = 40.0
-var hex_height = 20.0
-var screw_radius = hex_radius * 0.7
-var thread_pitch = screw_radius / 5.0
-var screw_length = 40.0
-var tolerance = 0.5
+const hexRadius = 40.0
+const hexHeight = 20.0
+const screwRadius = hexRadius * 0.7
+const threadPitch = screwRadius / 5.0
+const screwLength = 40.0
+const tolerance = 0.5
 
-var base_thickness = 4.0
+const baseThickness = 4.0
 
 //-----------------------------------------------------------------------------
 
-func bolt_container() SDF3 {
+func boltContainer() (sdf.SDF3, error) {
 
 	// build hex head
-	hex := HexHead3D(hex_radius, hex_height, "tb")
-
+	hex, err := obj.HexHead3D(hexRadius, hexHeight, "tb")
+	if err != nil {
+		return nil, err
+	}
 	// build the screw portion
-	r := screw_radius - tolerance
-	l := screw_length
-	screw := Screw3D(ISOThread(r, thread_pitch, "external"), l, thread_pitch, 1)
+	r := screwRadius - tolerance
+	l := screwLength
+	isoThread, err := sdf.ISOThread(r, threadPitch, true)
+	if err != nil {
+		return nil, err
+	}
+	screw, err := sdf.Screw3D(isoThread, l, 0, threadPitch, 1)
+	if err != nil {
+		return nil, err
+	}
 	// chamfer the thread
-	screw = ChamferedCylinder(screw, 0, 0.25)
-	screw = Transform3D(screw, Translate3d(V3{0, 0, l / 2}))
+	screw, err = obj.ChamferedCylinder(screw, 0, 0.25)
+	if err != nil {
+		return nil, err
+	}
+	screw = sdf.Transform3D(screw, sdf.Translate3d(v3.Vec{0, 0, l / 2}))
 
 	// build the internal cavity
-	r = screw_radius * 0.75
-	l = screw_length + hex_height
-	round := screw_radius * 0.1
-	ofs := (l / 2) - (hex_height / 2) + base_thickness
-	cavity := Cylinder3D(l, r, round)
-	cavity = Transform3D(cavity, Translate3d(V3{0, 0, ofs}))
+	r = screwRadius * 0.75
+	l = screwLength + hexHeight
+	round := screwRadius * 0.1
+	ofs := (l / 2) - (hexHeight / 2) + baseThickness
+	cavity, err := sdf.Cylinder3D(l, r, round)
+	if err != nil {
+		return nil, err
+	}
+	cavity = sdf.Transform3D(cavity, sdf.Translate3d(v3.Vec{0, 0, ofs}))
 
-	return Difference3D(Union3D(hex, screw), cavity)
+	return sdf.Difference3D(sdf.Union3D(hex, screw), cavity), nil
 }
 
 //-----------------------------------------------------------------------------
 
-func nut_top() SDF3 {
+func nutTop() sdf.SDF3 {
 	return nil
 }
 
 //-----------------------------------------------------------------------------
 
 func main() {
-	RenderSTL(bolt_container(), 200, "container.stl")
+	bc, err := boltContainer()
+	if err != nil {
+		log.Fatalf("error: %s", err)
+	}
+	render.ToSTL(bc, "container.stl", render.NewMarchingCubesOctree(200))
 }
 
 //-----------------------------------------------------------------------------
