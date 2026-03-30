@@ -1,6 +1,6 @@
 module github.com/gmlewis/sdfx
 
-go 1.20
+go 1.25.0
 
 require (
 	github.com/ajstarks/svgo v0.0.0-20211024235047-1546f124cd8b
@@ -11,7 +11,7 @@ require (
 	github.com/llgcode/draw2d v0.0.0-20210904075650-80aa0a2a901d
 	github.com/stretchr/testify v1.8.2
 	github.com/yofu/dxf v0.0.0-20190710012328-5a6d1e83f16c
-	golang.org/x/image v0.18.0
+	golang.org/x/image v0.38.0
 	gonum.org/v1/gonum v0.12.0
 )
 
