@@ -12,10 +12,10 @@ import (
 	"io"
 	"math"
 
+	"github.com/dhconnelly/rtreego"
 	"github.com/gmlewis/sdfx/render"
 	"github.com/gmlewis/sdfx/sdf"
 	v3 "github.com/gmlewis/sdfx/vec/v3"
-	"github.com/dhconnelly/rtreego"
 	"github.com/hschendel/stl"
 )
 
